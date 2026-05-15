@@ -1,34 +1,35 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import {
   LayoutGrid, MapPin, TrendingUp, Radio, Calendar,
-  Bookmark, Plus, X, Zap,
-  Users,
+  Bookmark, Plus, X, Zap, Settings, LogOut,
 } from 'lucide-react';
 
 const NAV_GROUPS = [
   {
     title: 'Keşfet',
     items: [
-      { icon: LayoutGrid, label: 'Keşfet',                 path: '/dashboard' },
-      { icon: MapPin,     label: 'Yakınımdaki Etkinlikler', path: '/nearby' },
+      { icon: LayoutGrid, label: 'Keşfet',                  path: '/dashboard' },
+      { icon: MapPin,     label: 'Yakınımdaki Etkinlikler',  path: '/nearby' },
     ],
   },
   {
     title: 'Topluluk',
     items: [
       { icon: TrendingUp, label: 'Trendler',       path: '/trends' },
-{ icon: Users, label: 'Topluluk', path: '/live-stream' },
-      { icon: Calendar,   label: 'Dinamik Takvim', path: '/calendar' },
+      { icon: Radio,      label: 'Topluluk',        path: '/live-stream' },
+      { icon: Calendar,   label: 'Dinamik Takvim',  path: '/calendar' },
     ],
   },
   {
     title: 'Kişisel',
     items: [
-      { icon: Bookmark, label: 'Kaydettiklerim', path: '/my-events' },
+      { icon: Bookmark, label: 'Etkinliklerim', path: '/my-events' },
     ],
   },
 ];
@@ -40,9 +41,18 @@ interface SidebarProps {
 
 function NavContent({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast.success('Çıkış yapıldı.');
+    router.push('/login');
+    onClose();
+  };
 
   return (
-    <>
+    <div className="flex flex-col h-full">
+      {/* Logo */}
       <div className="flex items-center gap-2.5 mb-8 px-2">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-md shadow-sky-200 shrink-0">
           <Zap size={15} className="text-white" />
@@ -50,6 +60,7 @@ function NavContent({ onClose }: { onClose: () => void }) {
         <span className="text-base font-black tracking-tight text-slate-900">EtkinRota</span>
       </div>
 
+      {/* Create */}
       <Link
         href="/create-event"
         prefetch
@@ -60,6 +71,7 @@ function NavContent({ onClose }: { onClose: () => void }) {
         <Plus size={16} /> Etkinlik Oluştur
       </Link>
 
+      {/* Nav */}
       <nav className="flex flex-col gap-5 flex-1">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
@@ -93,7 +105,34 @@ function NavContent({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </nav>
-    </>
+
+      {/* Bottom — Settings + Logout */}
+      <div className="pt-4 border-t border-slate-100 flex flex-col gap-0.5">
+        <Link
+          href="/settings"
+          prefetch
+          onClick={onClose}
+          className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group ${
+            pathname === '/settings'
+              ? 'bg-sky-50 text-sky-600'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          {pathname === '/settings' && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-sky-500" />
+          )}
+          <Settings size={16} className={`shrink-0 ${pathname === '/settings' ? 'text-sky-500' : 'text-slate-400 group-hover:text-slate-600'}`} />
+          Ayarlar
+        </Link>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all group w-full text-left"
+        >
+          <LogOut size={16} className="shrink-0 text-slate-400 group-hover:text-red-500" />
+          Çıkış Yap
+        </button>
+      </div>
+    </div>
   );
 }
 

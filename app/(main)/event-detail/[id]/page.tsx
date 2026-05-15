@@ -12,6 +12,8 @@ import {
   Ticket, CheckCircle2, XCircle, AlertCircle, Crown, Share2,
   Heart, ExternalLink, Loader2, ChevronRight,
 } from 'lucide-react';
+import { useAuthModal } from '@/components/AuthModal';
+
 
 const StaticMap = dynamic(() => import('@/components/ui/StaticMap'), {
   ssr: false,
@@ -122,6 +124,8 @@ function CapacityBar({ percent }: { percent: number }) {
 // ─── Ana Bileşen ──────────────────────────────────────────────────────────────
 
 export default function EventDetailPage() {
+  const { open } = useAuthModal();
+
   const { id: eventId } = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -198,8 +202,7 @@ export default function EventDetailPage() {
   // Katılım işlemi
   const handleAttend = async () => {
     if (!currentUserId) {
-      toast.error('Katılmak için giriş yapmalısınız.');
-      router.push('/login');
+      open(); 
       return;
     }
     if (event?.capacityPercent >= 100) return;

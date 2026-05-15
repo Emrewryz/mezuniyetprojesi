@@ -1,423 +1,373 @@
 'use client';
 
-import React, { useState, useEffect, useRef, ChangeEvent } from "react";
-import Image from "next/image";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 import {
-  Search,
-  Bell,
-  Heart,
-  Save,
-  Pencil,
-  BellRing,
-  ShieldCheck,
-  Smartphone,
-  Loader2
-} from "lucide-react";
+  User, Mail, Lock, Bell, Shield, Trash2, LogOut,
+  ChevronRight, Check, Loader2, Eye, EyeOff, X,
+  AlertTriangle, Smartphone, Globe,
+} from 'lucide-react';
 
-// Supabase import (Kendi dizinine göre ayarlarsın)
-// import { supabase } from "@/lib/supabase";
+interface Profile {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  bio: string | null;
+  role: string;
+  email_notifications: boolean;
+  push_notifications: boolean;
+  is_pro: boolean;
+}
 
-// ── Top Header ────────────────────────────────
-function TopHeader() {
+function SectionCard({ children }: { children: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-30 bg-slate-50/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-6 md:px-10 py-4">
-      {/* Mobile Title (Hidden on desktop) */}
-      <span className="md:hidden text-lg font-black text-slate-800 tracking-tight">
-        Ayarlar
-      </span>
-
-      {/* Desktop Center Title */}
-      <div className="hidden md:flex flex-1 justify-center">
-        <span className="text-sm font-bold text-slate-700 tracking-wide">
-          Hesap Tercihleri
-        </span>
-      </div>
-
-      {/* Right actions */}
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Ara..."
-            className="bg-white border border-slate-200 rounded-full py-2 pl-9 pr-4 text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-200 w-48 focus:w-64 transition-all duration-300"
-          />
-        </div>
-        <button className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-colors">
-          <Bell className="w-4 h-4" />
-        </button>
-        <button className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-red-500 hover:border-red-200 transition-colors">
-          <Heart className="w-4 h-4" />
-        </button>
-      </div>
-    </header>
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
+      {children}
+    </div>
   );
 }
 
-// ── Mini Toggle (Switch) Component ────────────
-const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => {
+function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
-    <div
-      onClick={onChange}
-      className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${
-        checked ? 'bg-blue-600' : 'bg-slate-300'
-      }`}
-    >
-      <div
-        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
-          checked ? 'translate-x-6' : 'translate-x-0'
-        }`}
-      />
+    <div className="px-6 py-4 border-b border-slate-50">
+      <p className="text-sm font-bold text-slate-900">{title}</p>
+      {desc && <p className="text-xs text-slate-400 mt-0.5">{desc}</p>}
     </div>
   );
-};
+}
 
-export default function SettingsPage() {
-  // ── State Yönetimi ──
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error' | null, text: string }>({ type: null, text: '' });
-  
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [bio, setBio] = useState("");
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [pushNotif, setPushNotif] = useState(false);
-  const [isPro, setIsPro] = useState(false);
-  
-  const [avatarUrl, setAvatarUrl] = useState("https://i.pravatar.cc/250?img=5");
-  const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Veri Çekme (Simülasyon) ──
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        // GERÇEK SUPABASE SORGUSU BURAYA GELECEK:
-        /*
-        const { data: { user } } = await supabase.auth.getUser();
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile) {
-          setFirstName(profile.first_name || "");
-          setLastName(profile.last_name || "");
-          setEmail(user.email || "");
-          setBio(profile.bio || "");
-          setEmailNotif(profile.email_notifications);
-          setPushNotif(profile.push_notifications);
-          setIsPro(profile.is_pro);
-          if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
-        }
-        */
-
-        // Simüle edilmiş veri
-        setTimeout(() => {
-          setFirstName("Belinay");
-          setLastName("Özcan");
-          setEmail("belinay@example.com");
-          setBio("Dijital sanat ve teknoloji etkinliklerine ilgi duyuyorum. Hafta sonları atölye çalışmalarına katılmayı severim.");
-          setEmailNotif(true);
-          setPushNotif(false);
-          setIsPro(true);
-          setLoading(false);
-        }, 800);
-
-      } catch (error) {
-        console.error("Profil bilgileri çekilirken hata:", error);
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, []);
-
-  // ── Profil Fotoğrafı Seçme ──
-  const handleAvatarChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setNewAvatarFile(file);
-      // Önizleme için URL oluşturuyoruz
-      setAvatarUrl(URL.createObjectURL(file));
-    }
-  };
-
-  // ── Veri Kaydetme ──
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveMessage({ type: null, text: '' });
-    
-    try {
-      // GERÇEK SUPABASE GÜNCELLEMESİ BURAYA GELECEK:
-      /*
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      let uploadedAvatarUrl = avatarUrl;
-      
-      // Eğer yeni bir fotoğraf seçildiyse storage'a yükle
-      if (newAvatarFile) {
-        const fileExt = newAvatarFile.name.split('.').pop();
-        const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, newAvatarFile);
-          
-        if (!uploadError) {
-          uploadedAvatarUrl = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
-        }
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: firstName,
-          last_name: lastName,
-          bio: bio,
-          email_notifications: emailNotif,
-          push_notifications: pushNotif,
-          avatar_url: uploadedAvatarUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
-      */
-
-      // Simülasyon gecikmesi
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      
-      setSaveMessage({ type: 'success', text: 'Değişiklikler başarıyla kaydedildi.' });
-      
-      // Mesajı 3 saniye sonra gizle
-      setTimeout(() => setSaveMessage({ type: null, text: '' }), 3000);
-
-    } catch (error) {
-      console.error("Kaydetme hatası:", error);
-      setSaveMessage({ type: 'error', text: 'Kaydedilirken bir hata oluştu.' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="w-full min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
-
+function SettingRow({ icon: Icon, label, desc, children, danger }: {
+  icon: any; label: string; desc?: string; children?: React.ReactNode; danger?: boolean;
+}) {
   return (
-    <div className="w-full min-h-screen bg-slate-50">
-      <TopHeader />
+    <div className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/50 transition-colors">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${danger ? 'bg-red-50' : 'bg-slate-50'}`}>
+        <Icon size={16} className={danger ? 'text-red-500' : 'text-slate-400'} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold ${danger ? 'text-red-600' : 'text-slate-800'}`}>{label}</p>
+        {desc && <p className="text-xs text-slate-400 mt-0.5">{desc}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
 
-      <main className="max-w-5xl mx-auto px-4 md:px-10 py-8 md:py-12">
-        {/* Page Heading */}
-        <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">
-              Ayarlar
-            </h1>
-            <p className="text-slate-500 text-sm md:text-base">
-              Profilinizi, bildirimlerinizi ve gizlilik tercihlerinizi yönetin.
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!value)}
+      className={`relative w-11 h-6 rounded-full transition-all duration-200 ${value ? 'bg-blue-500' : 'bg-slate-200'}`}
+    >
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+  );
+}
+
+function DeleteModal({ onConfirm, onCancel, loading }: { onConfirm: () => void; onCancel: () => void; loading: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onCancel}
+    >
+      <motion.div
+        initial={{ scale: 0.93, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.93 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 w-full max-w-sm flex flex-col gap-4"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
+            <AlertTriangle size={18} className="text-red-500" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-black text-slate-900">Hesabı Sil</p>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Tüm etkinlikler, katılımlar ve veriler kalıcı olarak silinir. Bu işlem geri alınamaz.
             </p>
           </div>
-          
-          {/* Başarı/Hata Mesajı */}
-          {saveMessage.type && (
-            <div className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-2 ${
-              saveMessage.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
-            }`}>
-              {saveMessage.text}
-            </div>
-          )}
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-full text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
+            İptal
+          </button>
+          <button onClick={onConfirm} disabled={loading} className="flex-1 py-2.5 rounded-full text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Sil
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+export default function SettingsPage() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showPwForm, setShowPwForm] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [bio, setBio] = useState('');
+  const [emailNotif, setEmailNotif] = useState(true);
+  const [pushNotif, setPushNotif] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/login'); return; }
+      setEmail(user.email || '');
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (data) {
+        setProfile(data);
+        setFirstName(data.first_name || '');
+        setLastName(data.last_name || '');
+        setBio(data.bio || '');
+        setEmailNotif(data.email_notifications ?? true);
+        setPushNotif(data.push_notifications ?? false);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const saveProfile = async () => {
+    if (!profile) return;
+    setSaveLoading(true);
+    const { error } = await supabase.from('profiles').update({
+      first_name: firstName.trim() || null,
+      last_name: lastName.trim() || null,
+      bio: bio.trim() || null,
+    }).eq('id', profile.id);
+    setSaveLoading(false);
+    if (error) { toast.error('Kayıt başarısız.'); return; }
+    toast.success('Profil güncellendi.');
+  };
+
+  const saveNotifications = async () => {
+    if (!profile) return;
+    const { error } = await supabase.from('profiles').update({
+      email_notifications: emailNotif,
+      push_notifications: pushNotif,
+    }).eq('id', profile.id);
+    if (error) toast.error('Kaydedilemedi.');
+    else toast.success('Bildirim tercihleri güncellendi.');
+  };
+
+  const changePassword = async () => {
+    if (newPassword.length < 6) { toast.error('Şifre en az 6 karakter olmalı.'); return; }
+    setPwLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPwLoading(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Şifre güncellendi.');
+    setNewPassword('');
+    setShowPwForm(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('profiles').delete().eq('id', user.id);
+    await supabase.auth.signOut();
+    toast.success('Hesap silindi.');
+    router.push('/login');
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#f5f7f9] flex items-center justify-center">
+      <Loader2 size={22} className="animate-spin text-slate-400" />
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col min-h-screen bg-[#f5f7f9]">
+      <div className="px-5 md:px-10 py-8 max-w-2xl mx-auto w-full flex flex-col gap-6">
+
+        {/* Header */}
+        <div>
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">EtkinRota</p>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">Ayarlar</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Hesap ve tercih yönetimi.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* ── SOL SÜTUN (Formlar) ── */}
-          <div className="lg:col-span-8 flex flex-col gap-8">
-            
-            {/* Kişisel Bilgiler Kartı */}
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800 mb-6">Kişisel Bilgiler</h2>
-              
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Ad */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Ad
-                    </label>
-                    <input
-                      type="text"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all"
-                    />
-                  </div>
-                  {/* Soyad */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Soyad
-                    </label>
-                    <input
-                      type="text"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* E-posta */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    E-Posta Adresi
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                    </div>
-                    <input
-                      type="email"
-                      value={email}
-                      disabled
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-500 cursor-not-allowed transition-all"
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1.5">E-posta adresi değiştirilemez.</p>
-                </div>
-
-                {/* Bio */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Hakkımda (BİO)
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all resize-none leading-relaxed"
-                  />
-                </div>
-
-                {/* Kaydet Butonu */}
-                <div className="flex justify-end pt-2">
-                  <button 
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-bold py-3 px-6 rounded-xl shadow-lg shadow-blue-200 transition-all duration-200 disabled:opacity-70 disabled:active:scale-100"
-                  >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
-                  </button>
-                </div>
+        {/* Profil Bilgileri */}
+        <SectionCard>
+          <SectionHeader title="Profil Bilgileri" desc="Ad, soyad ve kısa biyografi." />
+          <div className="px-6 py-5 flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Ad</label>
+                <input value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Adınız"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Soyad</label>
+                <input value={lastName} onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Soyadınız"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all" />
               </div>
             </div>
-          </div>
-
-          {/* ── SAĞ SÜTUN (Widget'lar) ── */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            
-            {/* Profil Görünümü Kartı */}
-            <div className="bg-white rounded-3xl p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
-              {/* Hafif Arka Plan Parıltısı */}
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl"></div>
-              
-              <div className="relative mb-5 group">
-                <div className="w-28 h-28 rounded-full p-1 bg-gradient-to-tr from-blue-500 to-purple-500">
-                  <div className="w-full h-full rounded-full border-4 border-white overflow-hidden relative bg-slate-200">
-                    <Image 
-                      src={avatarUrl} 
-                      alt="Profil Resmi" 
-                      fill 
-                      className="object-cover"
-                      unoptimized
-                    />
-                  </div>
-                </div>
-                {/* Düzenle İkonu & Gizli Input */}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  ref={fileInputRef} 
-                  onChange={handleAvatarChange} 
-                  className="hidden" 
-                />
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center border-2 border-white shadow-md hover:bg-blue-700 transition-colors"
-                >
-                  <Pencil className="w-3.5 h-3.5 text-white" />
-                </button>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Biyografi</label>
+              <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
+                placeholder="Kendinizden kısaca bahsedin..."
+                style={{ resize: 'none' }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all" />
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                <span className="text-xs font-black text-slate-600">
+                  {(firstName?.charAt(0) || profile?.id?.charAt(0) || '?').toUpperCase()}
+                </span>
               </div>
-
-              <h3 className="text-xl font-black text-slate-800 mb-2">{firstName} {lastName}</h3>
-              {isPro && (
-                <div className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-600 px-3 py-1 rounded-full text-xs font-bold">
-                  <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
-                  PRO Üye
-                </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-700 truncate">
+                  {[firstName, lastName].filter(Boolean).join(' ') || 'İsimsiz Kullanıcı'}
+                </p>
+                <p className="text-[10px] text-slate-400 capitalize">{profile?.role === 'organizer' ? 'Organizatör' : 'Katılımcı'}</p>
+              </div>
+              {profile?.is_pro && (
+                <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[10px] font-bold border border-amber-200">PRO</span>
               )}
             </div>
-
-            {/* Bildirim Ayarları Kartı */}
-            <div className="bg-white rounded-3xl p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-5">
-                <BellRing className="w-4 h-4 text-blue-500" />
-                Bildirimler
-              </h3>
-              
-              <div className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">E-posta Bildirimleri</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Haftalık bülten ve özetler.</p>
-                  </div>
-                  <ToggleSwitch checked={emailNotif} onChange={() => setEmailNotif(!emailNotif)} />
-                </div>
-                
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">Anlık Bildirimler</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Etkinlik hatırlatıcıları (Push).</p>
-                  </div>
-                  <ToggleSwitch checked={pushNotif} onChange={() => setPushNotif(!pushNotif)} />
-                </div>
-              </div>
-            </div>
-
-            {/* Güvenlik & Gizlilik (Ekstra) */}
-            <div className="bg-white rounded-3xl p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-5">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                Güvenlik
-              </h3>
-              <button className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50 transition-colors group mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:text-blue-600 transition-colors">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-semibold text-slate-700">İki Adımlı Doğrulama</p>
-                    <p className="text-xs text-slate-400">Şu an kapalı</p>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-blue-600">Aç</span>
-              </button>
-            </div>
-
+            <button onClick={saveProfile} disabled={saveLoading}
+              className="self-end flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
+              {saveLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              Kaydet
+            </button>
           </div>
-        </div>
-      </main>
+        </SectionCard>
+
+        {/* Hesap */}
+        <SectionCard>
+          <SectionHeader title="Hesap" desc="E-posta ve şifre yönetimi." />
+          <div className="divide-y divide-slate-50">
+            <SettingRow icon={Mail} label="E-posta" desc={email}>
+              <span className="text-xs text-slate-400 font-medium shrink-0">Değiştirilemez</span>
+            </SettingRow>
+            <div>
+              <div
+                className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                onClick={() => setShowPwForm((v) => !v)}
+              >
+                <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
+                  <Lock size={16} className="text-slate-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-800">Şifre</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Hesap şifreni değiştir</p>
+                </div>
+                <ChevronRight size={16} className={`text-slate-300 transition-transform ${showPwForm ? 'rotate-90' : ''}`} />
+              </div>
+              <AnimatePresence>
+                {showPwForm && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-6 pb-4 flex flex-col gap-3">
+                      <div className="relative">
+                        <input
+                          type={showNewPw ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Yeni şifre (min. 6 karakter)"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+                        />
+                        <button onClick={() => setShowNewPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                      <button onClick={changePassword} disabled={pwLoading || !newPassword}
+                        className="self-end flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                        style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
+                        {pwLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Güncelle
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </SectionCard>
+
+        {/* Bildirimler */}
+        <SectionCard>
+          <SectionHeader title="Bildirimler" />
+          <div className="divide-y divide-slate-50">
+            <SettingRow icon={Mail} label="E-posta Bildirimleri" desc="Etkinlik hatırlatmaları ve güncellemeler">
+              <Toggle value={emailNotif} onChange={(v) => { setEmailNotif(v); saveNotifications(); }} />
+            </SettingRow>
+            <SettingRow icon={Smartphone} label="Push Bildirimleri" desc="Anlık uygulama bildirimleri">
+              <Toggle value={pushNotif} onChange={(v) => { setPushNotif(v); saveNotifications(); }} />
+            </SettingRow>
+          </div>
+        </SectionCard>
+
+        {/* Gizlilik */}
+        <SectionCard>
+          <SectionHeader title="Gizlilik & Güvenlik" />
+          <div className="divide-y divide-slate-50">
+            <SettingRow icon={Globe} label="Profil Görünürlüğü" desc="Profilin herkese açık">
+              <span className="text-xs font-semibold text-slate-400">Herkese Açık</span>
+            </SettingRow>
+            <SettingRow icon={Shield} label="Veri Gizliliği" desc="Kişisel veri kullanım tercihleri">
+              <ChevronRight size={15} className="text-slate-300" />
+            </SettingRow>
+          </div>
+        </SectionCard>
+
+        {/* Oturum & Hesap */}
+        <SectionCard>
+          <SectionHeader title="Oturum & Hesap" />
+          <div className="divide-y divide-slate-50">
+            <button onClick={handleLogout} className="w-full">
+              <SettingRow icon={LogOut} label="Çıkış Yap" desc="Tüm cihazlarda oturumu kapat">
+                <ChevronRight size={15} className="text-slate-300" />
+              </SettingRow>
+            </button>
+            <button onClick={() => setShowDeleteModal(true)} className="w-full">
+              <SettingRow icon={Trash2} label="Hesabı Sil" desc="Tüm verilerini kalıcı olarak sil" danger>
+                <ChevronRight size={15} className="text-red-200" />
+              </SettingRow>
+            </button>
+          </div>
+        </SectionCard>
+
+        {/* Version */}
+        <p className="text-center text-[11px] text-slate-300 font-medium pb-4">
+          EtkinRota v1.0.0 — MVP
+        </p>
+      </div>
+
+      <AnimatePresence>
+        {showDeleteModal && (
+          <DeleteModal onConfirm={handleDeleteAccount} onCancel={() => setShowDeleteModal(false)} loading={deleteLoading} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

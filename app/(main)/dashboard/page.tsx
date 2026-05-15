@@ -352,7 +352,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // ── Veri Çekme ──────────────────────────────────────────────────────────────
@@ -476,9 +475,7 @@ export default function DashboardPage() {
 
   // ── Search toggle ────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (searchOpen) searchRef.current?.focus();
-  }, [searchOpen]);
+  
 
   const pathname = '/dashboard';
 
@@ -502,32 +499,7 @@ export default function DashboardPage() {
           </p>
 
           <div className="flex items-center gap-1">
-            <AnimatePresence>
-              {searchOpen && (
-                <motion.div
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 200, opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <input
-                    ref={searchRef}
-                    type="text"
-                    placeholder="Etkinlik ara..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-100 rounded-xl px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <button
-              onClick={() => { setSearchOpen((v) => !v); if (searchOpen) setSearchQuery(''); }}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
-            >
-              {searchOpen ? <X size={16} /> : <Search size={16} />}
-            </button>
+            
             <button className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors relative">
               <Bell size={16} />
               <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-red-500" />

@@ -16,6 +16,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   if (isFullscreen) {
     return (
       <>
+      
         <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
         {children}
       </>
@@ -23,6 +24,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
+    
     <div className="flex min-h-screen bg-[#f5f7f9]">
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 

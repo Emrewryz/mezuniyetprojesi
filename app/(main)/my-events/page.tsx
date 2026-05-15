@@ -8,14 +8,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import {
-  Users, Zap, FileText, Plus, Pencil, Trash2,
-  Calendar, MapPin, Globe, ChevronRight, Loader2,
-  LayoutGrid, Clock, AlertTriangle, X,
+  Plus, Search, ArrowRight, QrCode, MapPin, Globe,
+  Clock, Users, Tag, X, Loader2, CalendarDays,
+  Pencil, ChevronDown, Trash2, AlertTriangle,
 } from 'lucide-react';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type EventStatus = 'published' | 'draft' | 'past';
 
 interface OrgEvent {
   id: string;
@@ -30,30 +26,11 @@ interface OrgEvent {
   cover_image_url: string | null;
   total_capacity: number;
   status: string;
+  tags: string[];
   attendeesCount: number;
 }
 
-// ─── Sabitler ────────────────────────────────────────────────────────────────
-
-const TABS: { key: EventStatus; label: string; icon: any }[] = [
-  { key: 'published', label: 'Yayındakiler', icon: Zap },
-  { key: 'draft',     label: 'Taslaklar',    icon: FileText },
-  { key: 'past',      label: 'Geçmiş',       icon: Clock },
-];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  music: 'Müzik', tech: 'Teknoloji', art: 'Sanat',
-  business: 'İş', social: 'Sosyal', sport: 'Spor', game: 'Oyun',
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  music: 'bg-pink-100 text-pink-700', tech: 'bg-blue-100 text-blue-700',
-  art: 'bg-violet-100 text-violet-700', business: 'bg-amber-100 text-amber-700',
-  social: 'bg-emerald-100 text-emerald-700', sport: 'bg-orange-100 text-orange-700',
-  game: 'bg-indigo-100 text-indigo-700',
-};
-
-const MESH_BG: Record<string, string> = {
+const MESH: Record<string, string> = {
   music: 'linear-gradient(135deg,#1e1b4b,#be185d)',
   tech: 'linear-gradient(135deg,#0f172a,#1d4ed8)',
   art: 'linear-gradient(135deg,#1a0533,#7c3aed)',
@@ -63,41 +40,50 @@ const MESH_BG: Record<string, string> = {
   game: 'linear-gradient(135deg,#0f0c29,#4338ca)',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+const isPast = (iso: string) => new Date(iso) < new Date();
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200 rounded-2xl ${className}`} />;
 }
 
-function categorise(ev: OrgEvent): EventStatus {
-  if (new Date(ev.end_at) < new Date()) return 'past';
-  return ev.status === 'published' ? 'published' : 'draft';
-}
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({ icon: Icon, label, value, gradient, shadow }: {
-  icon: any; label: string; value: number | string;
-  gradient: string; shadow: string;
-}) {
+function QRModal({ event, onClose }: { event: OrgEvent; onClose: () => void }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`flex items-center gap-4 bg-white rounded-3xl border border-slate-100 p-5 shadow-[0_4px_24px_rgba(0,0,0,0.05)]`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
     >
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br ${gradient} shadow-lg ${shadow}`}>
-        <Icon size={20} className="text-white" />
-      </div>
-      <div>
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{label}</p>
-        <p className="text-2xl font-black text-slate-900 leading-tight">{value}</p>
-      </div>
+      <motion.div
+        initial={{ scale: 0.93, y: 10 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.93 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 w-full max-w-xs flex flex-col items-center gap-5"
+      >
+        <div className="flex items-center justify-between w-full">
+          <p className="text-sm font-bold text-slate-900">Katılımı İşaretle</p>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="w-40 h-40 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center">
+          <QrCode size={88} className="text-slate-800" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-bold text-slate-900 line-clamp-1">{event.title}</p>
+          <p className="text-xs text-slate-400 mt-1">{event.attendeesCount} kayıtlı katılımcı</p>
+        </div>
+        <p className="text-[11px] text-slate-400 text-center">Katılımcı bu kodu okutarak check-in yapabilir.</p>
+      </motion.div>
     </motion.div>
   );
 }
-
-// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 
 function DeleteModal({ title, onConfirm, onCancel, loading }: {
   title: string; onConfirm: () => void; onCancel: () => void; loading: boolean;
@@ -107,35 +93,32 @@ function DeleteModal({ title, onConfirm, onCancel, loading }: {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={onCancel}
     >
       <motion.div
-        initial={{ scale: 0.95, y: 8 }}
+        initial={{ scale: 0.93, y: 10 }}
         animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 8 }}
+        exit={{ scale: 0.93 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm flex flex-col gap-4"
+        className="bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 w-full max-w-sm flex flex-col gap-4"
       >
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
             <AlertTriangle size={18} className="text-red-500" />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-black text-slate-900">Etkinliği Sil</p>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              <span className="font-semibold text-slate-700">"{title}"</span> etkinliğini silmek istediğinden emin misin? Bu işlem geri alınamaz.
+              <span className="font-semibold text-slate-700">"{title}"</span> silinsin mi? Bu işlem geri alınamaz.
             </p>
           </div>
-          <button onClick={onCancel} className="ml-auto text-slate-400 hover:text-slate-600 transition-colors shrink-0">
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X size={16} />
           </button>
         </div>
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2.5 rounded-full text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-          >
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-full text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
             İptal
           </button>
           <button
@@ -143,8 +126,7 @@ function DeleteModal({ title, onConfirm, onCancel, loading }: {
             disabled={loading}
             className="flex-1 py-2.5 rounded-full text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-            Sil
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Sil
           </button>
         </div>
       </motion.div>
@@ -152,138 +134,216 @@ function DeleteModal({ title, onConfirm, onCancel, loading }: {
   );
 }
 
-// ─── Event Row Card ───────────────────────────────────────────────────────────
+function TagBadge({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-semibold border border-blue-100">
+      #{tag}
+      {onRemove && (
+        <button onClick={onRemove} className="hover:text-red-500 transition-colors ml-0.5">
+          <X size={9} />
+        </button>
+      )}
+    </span>
+  );
+}
 
-function EventCard({ event, onDelete }: { event: OrgEvent; onDelete: (id: string) => void }) {
+function EventCard({ event, onQR, onDelete }: {
+  event: OrgEvent;
+  onQR: (ev: OrgEvent) => void;
+  onDelete: (ev: OrgEvent) => void;
+}) {
+  const [tags, setTags] = useState<string[]>(event.tags || []);
+  const [addingTag, setAddingTag] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const past = isPast(event.end_at);
   const capacityPct = event.total_capacity > 0
     ? Math.min(Math.round((event.attendeesCount / event.total_capacity) * 100), 100)
     : 0;
-  const fmtDate = new Date(event.start_at).toLocaleDateString('tr-TR', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
-  const isPast = new Date(event.end_at) < new Date();
+
+  const addTag = async () => {
+    const val = tagInput.trim().toLowerCase();
+    if (!val || tags.includes(val) || tags.length >= 5) return;
+    const next = [...tags, val];
+    const { error } = await supabase.from('events').update({ tags: next }).eq('id', event.id);
+    if (!error) { setTags(next); toast.success(`#${val} eklendi`); }
+    setTagInput(''); setAddingTag(false);
+  };
+
+  const removeTag = async (tag: string) => {
+    const next = tags.filter((t) => t !== tag);
+    const { error } = await supabase.from('events').update({ tags: next }).eq('id', event.id);
+    if (!error) setTags(next);
+  };
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.22 }}
-      className="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] transition-all flex gap-4 p-4 items-center group"
+      transition={{ duration: 0.2 }}
+      className={`bg-white border border-slate-100 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] transition-all overflow-hidden ${past ? 'opacity-60' : ''}`}
     >
-      {/* Cover */}
-      <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0">
-        {event.cover_image_url
-          ? <Image src={event.cover_image_url} alt={event.title} fill className="object-cover" unoptimized />
-          : <div className="absolute inset-0" style={{ background: MESH_BG[event.category] || '#1e293b' }} />
-        }
-        {isPast && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <Clock size={14} className="text-white/80" />
-          </div>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[event.category] || 'bg-blue-100 text-blue-700'}`}>
-            {CATEGORY_LABELS[event.category] || event.category}
-          </span>
-          {event.is_paid
-            ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">₺{event.price}</span>
-            : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Ücretsiz</span>
+      <div className="flex gap-4 p-4">
+        {/* Cover */}
+        <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0">
+          {event.cover_image_url
+            ? <Image src={event.cover_image_url} alt={event.title} fill className="object-cover" unoptimized />
+            : <div className="absolute inset-0" style={{ background: MESH[event.category] || '#1e293b' }} />
           }
         </div>
-        <p className="text-sm font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">{event.title}</p>
-        <div className="flex items-center gap-3 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1"><Calendar size={10} />{fmtDate}</span>
-          <span className="flex items-center gap-1">
-            {event.is_online ? <Globe size={10} /> : <MapPin size={10} />}
-            <span className="truncate max-w-[120px]">{event.location}</span>
-          </span>
-        </div>
 
-        {/* Capacity bar */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <motion.div
-              className={`h-full rounded-full ${capacityPct >= 90 ? 'bg-red-400' : capacityPct >= 60 ? 'bg-amber-400' : 'bg-blue-400'}`}
-              initial={{ width: 0 }}
-              animate={{ width: `${capacityPct}%` }}
-              transition={{ duration: 0.7, ease: 'easeOut' }}
-            />
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2 mb-1">
+            <p className="text-sm font-bold text-slate-900 line-clamp-1 flex-1">{event.title}</p>
+            {event.status === 'draft' && (
+              <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">Taslak</span>
+            )}
           </div>
-          <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">
-            {event.attendeesCount} / {event.total_capacity}
-          </span>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400 mb-2">
+            <span className="flex items-center gap-1"><Clock size={10} />{fmtDate(event.start_at)} · {fmtTime(event.start_at)}</span>
+            <span className="flex items-center gap-1">
+              {event.is_online ? <Globe size={10} /> : <MapPin size={10} />}
+              <span className="truncate max-w-[140px]">{event.location}</span>
+            </span>
+          </div>
+          {/* Capacity */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div
+                className={`h-full rounded-full ${capacityPct >= 90 ? 'bg-red-400' : capacityPct >= 60 ? 'bg-amber-400' : 'bg-blue-400'}`}
+                initial={{ width: 0 }}
+                animate={{ width: `${capacityPct}%` }}
+                transition={{ duration: 0.7, ease: 'easeOut' }}
+              />
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium shrink-0 flex items-center gap-1">
+              <Users size={9} /> {event.attendeesCount}/{event.total_capacity}
+            </span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onQR(event)}
+              disabled={past}
+              title="Katılımı İşaretle"
+              className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all disabled:opacity-30"
+            >
+              <QrCode size={14} />
+            </button>
+            <button
+              onClick={() => onDelete(event)}
+              title="Sil"
+              className="w-8 h-8 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-400 hover:bg-red-100 hover:text-red-600 transition-all"
+            >
+              <Trash2 size={13} />
+            </button>
+            <Link
+              href={`/my-events/${event.id}`}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+            >
+              Yönet <ArrowRight size={12} />
+            </Link>
+          </div>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <Tag size={10} /> Etiketler
+            <ChevronDown size={10} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        <Link
-          href={`/event-detail/${event.id}`}
-          className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
-          title="Detay"
-        >
-          <ChevronRight size={14} />
-        </Link>
-        <Link
-          href={`/create-event?edit=${event.id}`}
-          className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors"
-          title="Düzenle"
-        >
-          <Pencil size={13} />
-        </Link>
-        <button
-          onClick={() => onDelete(event.id)}
-          className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors"
-          title="Sil"
-        >
-          <Trash2 size={13} />
-        </button>
-      </div>
+      {/* Tags */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
+              {tags.map((tag) => (
+                <TagBadge key={tag} tag={tag} onRemove={() => removeTag(tag)} />
+              ))}
+              {addingTag ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    autoFocus
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addTag(); if (e.key === 'Escape') setAddingTag(false); }}
+                    placeholder="etiket..."
+                    className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] rounded-lg px-2.5 py-1 focus:outline-none focus:border-blue-400 w-24"
+                  />
+                  <button onClick={addTag} className="text-[10px] text-blue-500 font-bold hover:text-blue-700">Ekle</button>
+                  <button onClick={() => setAddingTag(false)} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>
+                </div>
+              ) : tags.length < 5 && (
+                <button
+                  onClick={() => setAddingTag(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-[10px] text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors"
+                >
+                  <Plus size={10} /> Etiket Ekle
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
-function EmptyState({ tab }: { tab: EventStatus }) {
-  const msgs: Record<EventStatus, { title: string; desc: string }> = {
-    published: { title: 'Yayında etkinliğin yok.', desc: 'Oluşturduğun etkinlikleri yayınla.' },
-    draft:     { title: 'Kayıtlı taslağın yok.',  desc: 'Yarım bıraktığın etkinlikler burada görünür.' },
-    past:      { title: 'Geçmiş etkinliğin yok.', desc: 'Tamamlanan etkinliklerin burada arşivlenir.' },
-  };
+function TimelineSection({ title, events, accent, onQR, onDelete }: {
+  title: string; events: OrgEvent[]; accent: string;
+  onQR: (ev: OrgEvent) => void; onDelete: (ev: OrgEvent) => void;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-      <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center">
-        <LayoutGrid size={28} className="text-slate-300" />
+    <div className="flex gap-5">
+      <div className="flex flex-col items-center pt-1">
+        <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${accent}`} />
+        <div className="w-px flex-1 bg-slate-200 mt-2" />
       </div>
-      <div>
-        <p className="text-sm font-bold text-slate-600">{msgs[tab].title}</p>
-        <p className="text-xs text-slate-400 mt-1">{msgs[tab].desc}</p>
+      <div className="flex-1 min-w-0 pb-10">
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{title}</p>
+        {events.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+            <CalendarDays size={24} className="text-slate-300" />
+            <p className="text-xs text-slate-400 font-medium">Henüz etkinlik yok.</p>
+            <Link href="/create-event" className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+              <Plus size={12} /> Oluştur
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <AnimatePresence mode="popLayout">
+              {events.map((ev) => (
+                <EventCard key={ev.id} event={ev} onQR={onQR} onDelete={onDelete} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
-      <Link
-        href="/create-event"
-        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg hover:shadow-blue-200"
-        style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}
-      >
-        <Plus size={15} /> Hemen Başla
-      </Link>
     </div>
   );
 }
-
-// ─── Ana Sayfa ─────────────────────────────────────────────────────────────────
 
 export default function MyEventsPage() {
   const router = useRouter();
   const [events, setEvents] = useState<OrgEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<EventStatus>('published');
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [qrTarget, setQrTarget] = useState<OrgEvent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OrgEvent | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -291,148 +351,103 @@ export default function MyEventsPage() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
-
       const { data, error } = await supabase
         .from('events')
         .select('*, event_attendees(count)')
         .eq('organizer_id', user.id)
-        .order('start_at', { ascending: false });
-
+        .order('start_at', { ascending: true });
       if (!error && data) {
-        setEvents(data.map((ev: any) => ({
-          ...ev,
-          attendeesCount: ev.event_attendees?.[0]?.count ?? 0,
-        })));
+        setEvents(data.map((ev: any) => ({ ...ev, attendeesCount: ev.event_attendees?.[0]?.count ?? 0 })));
       }
       setLoading(false);
     })();
   }, []);
 
-  const tabEvents = useMemo(
-    () => events.filter((ev) => categorise(ev) === activeTab),
-    [events, activeTab]
+  const filtered = useMemo(() =>
+    events.filter((ev) => !search || ev.title.toLowerCase().includes(search.toLowerCase()) || ev.location?.toLowerCase().includes(search.toLowerCase())),
+    [events, search]
   );
 
-  const stats = useMemo(() => ({
-    totalAttendees: events.reduce((s, e) => s + e.attendeesCount, 0),
-    published: events.filter((e) => categorise(e) === 'published').length,
-    drafts: events.filter((e) => categorise(e) === 'draft').length,
-  }), [events]);
+  const upcoming = filtered.filter((ev) => !isPast(ev.end_at));
+  const past = filtered.filter((ev) => isPast(ev.end_at));
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     const { error } = await supabase.from('events').delete().eq('id', deleteTarget.id);
-    if (error) {
-      toast.error('Silme işlemi başarısız: ' + error.message);
-    } else {
-      setEvents((prev) => prev.filter((e) => e.id !== deleteTarget.id));
-      toast.success('Etkinlik silindi.');
-    }
+    if (error) { toast.error('Silme başarısız: ' + error.message); }
+    else { setEvents((prev) => prev.filter((e) => e.id !== deleteTarget.id)); toast.success('Etkinlik silindi.'); }
     setDeleteLoading(false);
     setDeleteTarget(null);
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f5f7f9]">
-      <div className="px-5 md:px-10 py-8 max-w-5xl mx-auto w-full flex flex-col gap-6">
+      <div className="px-5 md:px-10 py-8 max-w-3xl mx-auto w-full flex flex-col gap-8">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-400 to-blue-700 flex items-center justify-center shadow-md shadow-blue-200">
-                <Zap size={14} className="text-white" />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">EtkinRota</span>
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Etkinliklerim</h1>
-            <p className="text-sm text-slate-400 mt-0.5">Oluşturduğun etkinlikleri yönet.</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">EtkinRota</p>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">Etkinliklerim</h1>
           </div>
-          <Link
-            href="/create-event"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg hover:shadow-blue-200 active:scale-[0.97]"
-            style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}
-          >
-            <Plus size={15} /> Yeni Etkinlik
-          </Link>
+          <div className="flex items-center gap-2">
+            <AnimatePresence>
+              {searchOpen && (
+                <motion.input
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 160, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Ara..."
+                  className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-sm"
+                />
+              )}
+            </AnimatePresence>
+            <button
+              onClick={() => { setSearchOpen((v) => !v); if (searchOpen) setSearch(''); }}
+              className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
+            >
+              {searchOpen ? <X size={15} /> : <Search size={15} />}
+            </button>
+            <Link
+              href="/create-event"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.97] shadow-sm"
+              style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}
+            >
+              <Plus size={15} /> Yeni
+            </Link>
+          </div>
         </div>
 
-        {/* Stats */}
+        {/* Timeline */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-100 flex gap-4 p-4">
+                <Skeleton className="w-14 h-14 rounded-xl shrink-0" />
+                <div className="flex-1 flex flex-col gap-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-1.5 w-full rounded-full" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard icon={Users}    label="Toplam Katılımcı"    value={stats.totalAttendees} gradient="from-blue-500 to-cyan-500"     shadow="shadow-blue-200" />
-            <StatCard icon={Zap}      label="Yayında"             value={stats.published}      gradient="from-emerald-500 to-teal-500"  shadow="shadow-emerald-200" />
-            <StatCard icon={FileText} label="Taslak"              value={stats.drafts}         gradient="from-amber-400 to-orange-500"  shadow="shadow-amber-200" />
+          <div>
+            <TimelineSection title="Yaklaşan" events={upcoming} accent="bg-blue-500" onQR={setQrTarget} onDelete={setDeleteTarget} />
+            <TimelineSection title="Geçmiş"   events={past}     accent="bg-slate-300" onQR={setQrTarget} onDelete={setDeleteTarget} />
           </div>
         )}
-
-        {/* Tabs */}
-        <div className="flex p-1 bg-white border border-slate-200 rounded-2xl shadow-sm w-fit">
-          {TABS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === key ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Icon size={13} /> {label}
-              {!loading && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                  activeTab === key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  {events.filter((e) => categorise(e) === key).length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* List */}
-        <div className="flex flex-col gap-3">
-          {loading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-slate-100 flex gap-4 p-4 items-center">
-                <Skeleton className="w-16 h-16 rounded-xl" />
-                <div className="flex-1 flex flex-col gap-2">
-                  <Skeleton className="h-3 w-24 rounded-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-2.5 w-full" />
-                </div>
-                <div className="flex gap-2">
-                  {Array.from({ length: 3 }).map((_, j) => <Skeleton key={j} className="w-8 h-8 rounded-xl" />)}
-                </div>
-              </div>
-            ))
-          ) : tabEvents.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.05)]">
-              <EmptyState tab={activeTab} />
-            </div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              {tabEvents.map((ev) => (
-                <EventCard key={ev.id} event={ev} onDelete={(id) => setDeleteTarget(events.find((e) => e.id === id)!)} />
-              ))}
-            </AnimatePresence>
-          )}
-        </div>
       </div>
 
-      {/* Delete Modal */}
       <AnimatePresence>
-        {deleteTarget && (
-          <DeleteModal
-            title={deleteTarget.title}
-            onConfirm={handleDelete}
-            onCancel={() => setDeleteTarget(null)}
-            loading={deleteLoading}
-          />
-        )}
+        {qrTarget && <QRModal event={qrTarget} onClose={() => setQrTarget(null)} />}
+        {deleteTarget && <DeleteModal title={deleteTarget.title} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleteLoading} />}
       </AnimatePresence>
     </div>
   );
