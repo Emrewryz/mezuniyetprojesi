@@ -53,7 +53,7 @@ export default function RegisterPage() {
     }
 
     setLoading(false);
-    router.push('/dashboard');
+    router.push('/onboarding');
   };
 
   return (

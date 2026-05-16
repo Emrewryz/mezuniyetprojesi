@@ -6,7 +6,8 @@ const PROTECTED_ROUTES = [
   "/live-stream", "/nearby", "/trends", "/calendar", "/my-events",
 ];
 
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password"];
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password", "/onboarding"];
+
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
