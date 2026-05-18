@@ -311,12 +311,13 @@ export default function OnboardingPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('profiles').upsert([{
-          id: user.id,
-          city: city.trim() || null,
-          goals,
-          preferences,
-        }], { onConflict: 'id' });
+       await supabase.from('profiles').upsert([{
+  id: user.id,
+  city: city.trim() || null,
+  goals,
+  preferences,
+  onboarding_completed: true,  // ← ekle
+}], { onConflict: 'id' });
       }
     } catch (e) { console.error(e); }
     finally {

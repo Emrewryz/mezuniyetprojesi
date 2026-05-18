@@ -1,65 +1,64 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { getRecommendedEvents, getPopularEvents, type RecommendedEvent, type MatchType } from '@/lib/recommendation';
 import {
   Heart, ArrowRight, Users, Globe, MapPin, Clock,
   X, Loader2, Search, Calendar,
   Music2, Cpu, Palette, Briefcase, PartyPopper, Dumbbell, Gamepad2,
-  Sparkles, Star, ChevronLeft, ChevronRight,
+  Sparkles, Star, ChevronLeft, ChevronRight, Users2,
 } from 'lucide-react';
 
 // ─── Sabitler ─────────────────────────────────────────────────────────────────
 
 const CATEGORY_META: Record<string, { label: string; icon: any; gradient: string; mesh: string }> = {
-  music:    { label: 'Müzik',      icon: Music2,      gradient: 'from-pink-500 to-rose-600',    mesh: 'radial-gradient(ellipse at 20% 50%,#f43f5e33 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#ec489933 0%,transparent 60%),linear-gradient(135deg,#1e1b4b,#312e81)' },
-  tech:     { label: 'Teknoloji',  icon: Cpu,         gradient: 'from-blue-500 to-cyan-600',    mesh: 'radial-gradient(ellipse at 20% 50%,#3b82f633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#06b6d433 0%,transparent 60%),linear-gradient(135deg,#0f172a,#1e3a5f)' },
-  art:      { label: 'Sanat',      icon: Palette,     gradient: 'from-violet-500 to-purple-600',mesh: 'radial-gradient(ellipse at 20% 50%,#8b5cf633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#a855f733 0%,transparent 60%),linear-gradient(135deg,#1a0533,#2d1b69)' },
-  business: { label: 'İş',         icon: Briefcase,   gradient: 'from-amber-500 to-orange-500', mesh: 'radial-gradient(ellipse at 20% 50%,#f59e0b33 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#ea580c33 0%,transparent 60%),linear-gradient(135deg,#1c1107,#431407)' },
-  social:   { label: 'Sosyal',     icon: PartyPopper, gradient: 'from-emerald-500 to-teal-600', mesh: 'radial-gradient(ellipse at 20% 50%,#10b98133 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#0d948133 0%,transparent 60%),linear-gradient(135deg,#022c22,#134e4a)' },
-  sport:    { label: 'Spor',       icon: Dumbbell,    gradient: 'from-orange-500 to-red-600',   mesh: 'radial-gradient(ellipse at 20% 50%,#f9731633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#dc262633 0%,transparent 60%),linear-gradient(135deg,#1c0a00,#450a0a)' },
-  game:     { label: 'Oyun',       icon: Gamepad2,    gradient: 'from-indigo-500 to-blue-600',  mesh: 'radial-gradient(ellipse at 20% 50%,#6366f133 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#1d4ed833 0%,transparent 60%),linear-gradient(135deg,#0f0c29,#1e1b4b)' },
+  music:    { label: 'Müzik',     icon: Music2,      gradient: 'from-pink-500 to-rose-600',    mesh: 'radial-gradient(ellipse at 20% 50%,#f43f5e33 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#ec489933 0%,transparent 60%),linear-gradient(135deg,#1e1b4b,#312e81)' },
+  tech:     { label: 'Teknoloji', icon: Cpu,         gradient: 'from-blue-500 to-cyan-600',    mesh: 'radial-gradient(ellipse at 20% 50%,#3b82f633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#06b6d433 0%,transparent 60%),linear-gradient(135deg,#0f172a,#1e3a5f)' },
+  art:      { label: 'Sanat',     icon: Palette,     gradient: 'from-violet-500 to-purple-600',mesh: 'radial-gradient(ellipse at 20% 50%,#8b5cf633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#a855f733 0%,transparent 60%),linear-gradient(135deg,#1a0533,#2d1b69)' },
+  business: { label: 'İş',        icon: Briefcase,   gradient: 'from-amber-500 to-orange-500', mesh: 'radial-gradient(ellipse at 20% 50%,#f59e0b33 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#ea580c33 0%,transparent 60%),linear-gradient(135deg,#1c1107,#431407)' },
+  social:   { label: 'Sosyal',    icon: PartyPopper, gradient: 'from-emerald-500 to-teal-600', mesh: 'radial-gradient(ellipse at 20% 50%,#10b98133 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#0d948133 0%,transparent 60%),linear-gradient(135deg,#022c22,#134e4a)' },
+  sport:    { label: 'Spor',      icon: Dumbbell,    gradient: 'from-orange-500 to-red-600',   mesh: 'radial-gradient(ellipse at 20% 50%,#f9731633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#dc262633 0%,transparent 60%),linear-gradient(135deg,#1c0a00,#450a0a)' },
+  game:     { label: 'Oyun',      icon: Gamepad2,    gradient: 'from-indigo-500 to-blue-600',  mesh: 'radial-gradient(ellipse at 20% 50%,#6366f133 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#1d4ed833 0%,transparent 60%),linear-gradient(135deg,#0f0c29,#1e1b4b)' },
 };
 
 const BASE_FILTERS = [
-  { value: 'all', label: 'Tümü' },
-  { value: 'music', label: 'Müzik' },
-  { value: 'tech', label: 'Teknoloji' },
-  { value: 'art', label: 'Sanat' },
+  { value: 'all',      label: 'Tümü' },
+  { value: 'music',    label: 'Müzik' },
+  { value: 'tech',     label: 'Teknoloji' },
+  { value: 'art',      label: 'Sanat' },
   { value: 'business', label: 'İş' },
-  { value: 'social', label: 'Sosyal' },
-  { value: 'sport', label: 'Spor' },
-  { value: 'game', label: 'Oyun' },
+  { value: 'social',   label: 'Sosyal' },
+  { value: 'sport',    label: 'Spor' },
+  { value: 'game',     label: 'Oyun' },
 ];
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const SUB_TO_MAIN: Record<string, string> = {
+  'yazılım':'tech','girişimcilik':'business','pazarlama':'business','finans':'business',
+  'veri bilimi':'tech','yapay zeka':'tech','tiyatro':'art','fotoğrafçılık':'art',
+  'resim':'art','sinema':'art','edebiyat':'art','heykel':'art',
+  'konser':'music','caz':'music','rock':'music','elektronik':'music',
+  'festival':'music','klasik müzik':'music','doğa yürüyüşü':'sport',
+  'kampçılık':'sport','yoga':'sport','bisiklet':'sport','tırmanış':'sport',
+  'yemek atölyesi':'social','kahve':'social','gastronomi':'social',
+  'topluluk':'social','şarap tadımı':'social',
+  'music':'music','tech':'tech','art':'art','business':'business',
+  'social':'social','sport':'sport','game':'game',
+};
 
-interface EventItem {
-  id: string; title: string; category: string; location: string;
-  is_online: boolean; is_paid: boolean; price: number; start_at: string;
-  cover_image_url: string | null; total_capacity: number;
-  attendeesCount: number; attendeeSeeds: string[];
-  relevanceScore: number; matchType: 'full' | 'city' | 'interest' | 'none';
+function prefsToCategories(prefs: string[]): string[] {
+  const s = new Set<string>();
+  prefs.forEach(p => { const c = SUB_TO_MAIN[p.toLowerCase()]; if (c) s.add(c); });
+  return Array.from(s);
 }
 
-interface UserProfile { city: string | null; preferences: string[] | null; }
+// ─── EventItem type ───────────────────────────────────────────────────────────
 
-// ─── Algoritma ────────────────────────────────────────────────────────────────
-
-function scoreEvent(ev: any, profile: UserProfile | null): { score: number; matchType: EventItem['matchType'] } {
-  const a = ev.event_attendees?.[0]?.count ?? 0;
-  if (!profile?.city && !profile?.preferences?.length) return { score: a, matchType: 'none' };
-  const cityMatch = profile?.city ? ev.location?.toLowerCase().includes(profile.city.toLowerCase()) : false;
-  const interestMatch = profile?.preferences?.includes(ev.category) ?? false;
-  if (cityMatch && interestMatch) return { score: 100 + a, matchType: 'full' };
-  if (cityMatch)                  return { score: 70  + a, matchType: 'city' };
-  if (interestMatch)              return { score: 40  + a, matchType: 'interest' };
-  return { score: a, matchType: 'none' };
-}
+type EventItem = RecommendedEvent & { attendeeSeeds: string[] };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,7 +87,14 @@ function AvatarStack({ count, seeds }: { count: number; seeds: string[] }) {
   );
 }
 
-function MatchBadge({ matchType }: { matchType: EventItem['matchType'] }) {
+// ─── MatchBadge ───────────────────────────────────────────────────────────────
+
+function MatchBadge({ matchType }: { matchType: MatchType }) {
+  if (matchType === 'followed_community') return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white">
+      <Users2 size={9} /> Takip Ettiğin
+    </span>
+  );
   if (matchType === 'full') return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-blue-500 to-blue-600 text-white">
       <Sparkles size={9} /> Sana Özel
@@ -106,7 +112,6 @@ function MatchBadge({ matchType }: { matchType: EventItem['matchType'] }) {
   );
   return null;
 }
-
 
 // ─── Carousel Hero ────────────────────────────────────────────────────────────
 
@@ -134,16 +139,10 @@ function CarouselHero({ events }: { events: EventItem[] }) {
   return (
     <div className="max-w-5xl mx-auto w-full">
       <div className="relative h-[320px] rounded-[32px] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-slate-100 select-none">
-        <AnimatePresence mode="wait">
-          <motion.div key={ev.id}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            className="absolute inset-0"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.08}
-            onDragEnd={(_, info) => { if (info.offset.x < -60) go(1); else if (info.offset.x > 60) go(-1); }}
-          >
+        <AnimatePresence initial={false}>
+          <motion.div key={ev.id + '-img'} className="absolute inset-0"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ duration: 0.35, ease: 'easeInOut' }}>
             {ev.cover_image_url ? (
               <Image src={ev.cover_image_url} alt={ev.title} fill className="object-cover pointer-events-none" unoptimized priority />
             ) : (
@@ -151,56 +150,54 @@ function CarouselHero({ events }: { events: EventItem[] }) {
                 {meta && <meta.icon size={160} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/[0.04]" />}
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-            <div className="absolute inset-0 flex flex-col justify-end p-8 pointer-events-none">
-              <div className="flex items-end justify-between gap-6">
-                <div className="flex flex-col gap-2.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {meta && (
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${meta.gradient}`}>
-                        <meta.icon size={11} /> {meta.label}
-                      </span>
-                    )}
-                    <MatchBadge matchType={ev.matchType} />
-                  </div>
-                  <h2 className="text-2xl font-black text-white leading-tight line-clamp-2 tracking-tight">{ev.title}</h2>
-                  <div className="flex flex-wrap gap-3 text-white/60 text-xs font-medium">
-                    <span className="flex items-center gap-1"><Clock size={11} />{fmtDate}</span>
-                    <span className="flex items-center gap-1">{ev.is_online ? <Globe size={11} /> : <MapPin size={11} />}{ev.location}</span>
-                    <span className="flex items-center gap-1"><Users size={11} />{ev.attendeesCount} katılımcı</span>
-                    <span className={`font-bold ${ev.is_paid ? 'text-white' : 'text-emerald-400'}`}>{ev.is_paid ? `₺${ev.price}` : 'Ücretsiz'}</span>
-                  </div>
-                </div>
-                <Link href={`/event-detail/${ev.id}`}
-                  className="pointer-events-auto shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white text-slate-900 rounded-full text-sm font-bold hover:bg-blue-50 transition-colors shadow-lg">
-                  İncele <ArrowRight size={14} />
-                </Link>
-              </div>
-            </div>
           </motion.div>
         </AnimatePresence>
 
-        {events.length > 1 && (
-          <>
-            <button onClick={() => go(-1)}
-              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/25 backdrop-blur-sm text-white items-center justify-center hover:bg-black/40 transition-colors z-10">
-              <ChevronLeft size={16} />
-            </button>
-            <button onClick={() => go(1)}
-              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/25 backdrop-blur-sm text-white items-center justify-center hover:bg-black/40 transition-colors z-10">
-              <ChevronRight size={16} />
-            </button>
-          </>
-        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+
+        <div className="absolute inset-0 flex flex-col justify-end p-8">
+          <div className="flex items-end justify-between gap-6">
+            <div className="flex flex-col gap-2.5 flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                {meta && (
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${meta.gradient}`}>
+                    <meta.icon size={11} /> {meta.label}
+                  </span>
+                )}
+                <MatchBadge matchType={ev.matchType} />
+              </div>
+              <motion.h2 key={ev.id + '-title'} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22 }}
+                className="text-2xl font-black text-white leading-tight line-clamp-2 tracking-tight">
+                {ev.title}
+              </motion.h2>
+              <motion.div key={ev.id + '-meta'} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ duration: 0.22, delay: 0.05 }}
+                className="flex flex-wrap gap-3 text-white/60 text-xs font-medium">
+                <span className="flex items-center gap-1"><Clock size={11} />{fmtDate}</span>
+                <span className="flex items-center gap-1">{ev.is_online ? <Globe size={11} /> : <MapPin size={11} />}{ev.location}</span>
+                <span className="flex items-center gap-1"><Users size={11} />{ev.attendeesCount} katılımcı</span>
+                <span className={`font-bold ${ev.is_paid ? 'text-white' : 'text-emerald-400'}`}>{ev.is_paid ? `₺${ev.price}` : 'Ücretsiz'}</span>
+              </motion.div>
+            </div>
+            <Link href={`/event-detail/${ev.id}`}
+              className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white text-slate-900 rounded-full text-sm font-bold hover:bg-blue-50 transition-colors shadow-lg">
+              İncele <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
 
         {events.length > 1 && (
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
-            {events.map((_, i) => (
-              <button key={i} onClick={() => { setActive(i); reset(); }}
-                className={`rounded-full transition-all duration-300 ${i === active ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/70'}`} />
-            ))}
-          </div>
+          <>
+            <button onClick={() => go(-1)} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/25 text-white items-center justify-center hover:bg-black/40 transition-colors z-10"><ChevronLeft size={16} /></button>
+            <button onClick={() => go(1)}  className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/25 text-white items-center justify-center hover:bg-black/40 transition-colors z-10"><ChevronRight size={16} /></button>
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+              {events.map((_, i) => (
+                <button key={i} onClick={() => { setActive(i); reset(); }}
+                  className={`rounded-full transition-all duration-300 ${i === active ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50'}`} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -260,13 +257,12 @@ function EventCard({ event, isFavorited, onToggleFavorite }: {
             {event.is_online ? <Globe size={10} /> : <MapPin size={10} />}{event.location}
           </p>
         </Link>
-        <div className="flex flex-col gap-1 mt-auto">
-          <div className="flex justify-between text-[10px] text-slate-400">
+        <div className="mt-auto">
+          <div className="flex justify-between text-[10px] text-slate-400 mb-1">
             <span>{event.attendeesCount} katılımcı</span><span>{capacityPct}%</span>
           </div>
           <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${capacityPct >= 90 ? 'bg-red-400' : capacityPct >= 70 ? 'bg-amber-400' : 'bg-blue-500'}`}
-              style={{ width: `${capacityPct}%` }} />
+            <div className={`h-full rounded-full ${capacityPct >= 90 ? 'bg-red-400' : capacityPct >= 70 ? 'bg-amber-400' : 'bg-blue-500'}`} style={{ width: `${capacityPct}%` }} />
           </div>
         </div>
         <AvatarStack count={event.attendeesCount} seeds={event.attendeeSeeds} />
@@ -278,76 +274,88 @@ function EventCard({ event, isFavorited, onToggleFavorite }: {
 // ─── Ana Sayfa ─────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const [mounted, setMounted] = useState(false);
   const [allEvents, setAllEvents] = useState<EventItem[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userPreferences, setUserPreferences] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-const [mounted, setMounted] = useState(false);
-const [searchFocused, setSearchFocused] = useState(false);
-const [cityFilter, setCityFilter] = useState('');
-useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => { if (searchOpen) searchRef.current?.focus(); }, [searchOpen]);
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-      const now = new Date().toISOString();
 
-      const [evRes, favRes, profileRes] = await Promise.all([
-        supabase.from('events').select('*, event_attendees(count)').eq('status', 'published').gte('end_at', now).order('start_at', { ascending: true }).limit(24),
-        user ? supabase.from('event_favorites').select('event_id').eq('user_id', user.id) : Promise.resolve({ data: [] }),
-        user ? supabase.from('profiles').select('city, preferences').eq('id', user.id).single() : Promise.resolve({ data: null }),
+      const [rawEvents, favRes, profileRes] = await Promise.all([
+        user ? getRecommendedEvents(user.id) : getPopularEvents(),
+        user
+          ? supabase.from('event_favorites').select('event_id').eq('user_id', user.id)
+          : Promise.resolve({ data: [] }),
+        user
+          ? supabase.from('profiles').select('preferences').eq('id', user.id).single()
+          : Promise.resolve({ data: null }),
       ]);
 
-      const profile: UserProfile | null = profileRes.data || null;
-      setUserProfile(profile);
+      // preferences'i filtre sıralaması için sakla
+      const prefs = (profileRes.data as any)?.preferences || [];
+      setUserPreferences(prefs);
 
-      const scored: EventItem[] = (evRes.data || []).map((ev: any) => {
-        const { score, matchType } = scoreEvent(ev, profile);
-        return { ...ev, attendeesCount: ev.event_attendees?.[0]?.count ?? 0, attendeeSeeds: [ev.id.slice(0,4), ev.id.slice(4,8), ev.id.slice(8,12)], relevanceScore: score, matchType };
-      }).sort((a, b) => b.relevanceScore - a.relevanceScore);
+      const events: EventItem[] = rawEvents.map(ev => ({
+        ...ev,
+        attendeeSeeds: [ev.id.slice(0,4), ev.id.slice(4,8), ev.id.slice(8,12)],
+      }));
 
-      setAllEvents(scored);
+      setAllEvents(events);
       setFavorites(new Set((favRes.data || []).map((f: any) => f.event_id)));
       setLoading(false);
     })();
   }, []);
 
+  // Kullanıcının ilgi kategorileri (filtre sıralaması için)
+  const userMainCategories = useMemo(() => prefsToCategories(userPreferences), [userPreferences]);
+
+  // Filtre butonlarını kullanıcı tercihlerine göre sırala
   const sortedFilters = useMemo(() => {
-    if (!userProfile?.preferences?.length) return BASE_FILTERS;
-    const prefs = userProfile.preferences;
-    const preferred = BASE_FILTERS.filter(f => f.value !== 'all' && prefs.includes(f.value));
-    const rest = BASE_FILTERS.filter(f => f.value !== 'all' && !prefs.includes(f.value));
+    if (!userMainCategories.length) return BASE_FILTERS;
+    const preferred = BASE_FILTERS.filter(f => f.value !== 'all' && userMainCategories.includes(f.value));
+    const rest      = BASE_FILTERS.filter(f => f.value !== 'all' && !userMainCategories.includes(f.value));
     return [BASE_FILTERS[0], ...preferred, ...rest];
-  }, [userProfile]);
+  }, [userMainCategories]);
 
   const featuredEvents = allEvents.slice(0, 4);
-  const gridEvents = allEvents.slice(4);
+  const gridEvents     = allEvents.slice(4);
 
   const filteredEvents = useMemo(() =>
-  gridEvents.filter((ev) => {
-    const matchCat = activeFilter === 'all' || ev.category === activeFilter;
-    const matchSearch = !searchQuery || ev.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchCity = !cityFilter || ev.location?.toLowerCase().includes(cityFilter.toLowerCase());
-    return matchCat && matchSearch && matchCity;
-  }),
-  [gridEvents, activeFilter, searchQuery, cityFilter]
-);
+    gridEvents.filter(ev => {
+      const matchCat    = activeFilter === 'all' || ev.category === activeFilter;
+      const matchSearch = !searchQuery ||
+        ev.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ev.location?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchSearch;
+    }),
+    [gridEvents, activeFilter, searchQuery]
+  );
 
   const handleToggleFavorite = useCallback(async (eventId: string, current: boolean) => {
     if (!currentUser) { toast.error('Favorilere eklemek için giriş yapmalısınız.'); return; }
-    setFavorites((prev) => { const n = new Set(prev); current ? n.delete(eventId) : n.add(eventId); return n; });
+    setFavorites(prev => { const n = new Set(prev); current ? n.delete(eventId) : n.add(eventId); return n; });
     try {
-      if (current) { await supabase.from('event_favorites').delete().eq('event_id', eventId).eq('user_id', currentUser.id); toast.success('Favorilerden çıkarıldı.'); }
-      else { await supabase.from('event_favorites').insert([{ event_id: eventId, user_id: currentUser.id }]); toast.success('Favorilere eklendi!'); }
+      if (current) {
+        await supabase.from('event_favorites').delete().eq('event_id', eventId).eq('user_id', currentUser.id);
+        toast.success('Favorilerden çıkarıldı.');
+      } else {
+        await supabase.from('event_favorites').insert([{ event_id: eventId, user_id: currentUser.id }]);
+        toast.success('Favorilere eklendi!');
+      }
     } catch {
-      setFavorites((prev) => { const n = new Set(prev); current ? n.add(eventId) : n.delete(eventId); return n; });
+      setFavorites(prev => { const n = new Set(prev); current ? n.add(eventId) : n.delete(eventId); return n; });
       toast.error('Bir hata oluştu.');
     }
   }, [currentUser]);
@@ -357,27 +365,23 @@ useEffect(() => { setMounted(true); }, []);
 
       {/* Carousel */}
       {!mounted || loading
-  ? <div className="max-w-5xl mx-auto w-full">
-      <div className="w-full h-[320px] rounded-[32px] bg-slate-200 animate-pulse" />
-    </div>
-  : <CarouselHero events={featuredEvents} />
-}
+        ? <div className="max-w-5xl mx-auto w-full"><div className="w-full h-[320px] rounded-[32px] bg-slate-200 animate-pulse" /></div>
+        : <CarouselHero events={featuredEvents} />
+      }
 
-      {/* Filters + Search */}
+      {/* Filtreler + Arama */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide flex-1 pb-1">
-          {sortedFilters.map((f) => {
-            const isPreferred = userProfile?.preferences?.includes(f.value);
+          {sortedFilters.map(f => {
+            const isPref = userMainCategories.includes(f.value);
             return (
               <button key={f.value} onClick={() => setActiveFilter(f.value)}
-                className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1 ${
-                  activeFilter === f.value
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : isPreferred
-                      ? 'bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100'
-                      : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700'
+                className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  activeFilter === f.value ? 'bg-slate-900 text-white shadow-sm'
+                    : isPref ? 'bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700'
                 }`}>
-                {isPreferred && f.value !== 'all' && <Sparkles size={8} />}
+                {isPref && f.value !== 'all' && <Sparkles size={8} />}
                 {f.label}
               </button>
             );
@@ -389,11 +393,11 @@ useEffect(() => { setMounted(true); }, []);
               <motion.input ref={searchRef}
                 initial={{ width: 0, opacity: 0 }} animate={{ width: 160, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.18 }}
                 type="text" placeholder="Etkinlik ara..." value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={e => setSearchQuery(e.target.value)}
                 className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 shadow-sm" />
             )}
           </AnimatePresence>
-          <button onClick={() => { setSearchOpen((v) => !v); if (searchOpen) setSearchQuery(''); }}
+          <button onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
             className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-all shadow-sm">
             {searchOpen ? <X size={14} /> : <Search size={14} />}
           </button>
@@ -423,7 +427,7 @@ useEffect(() => { setMounted(true); }, []);
       ) : (
         <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
-            {filteredEvents.map((ev) => (
+            {filteredEvents.map(ev => (
               <EventCard key={ev.id} event={ev} isFavorited={favorites.has(ev.id)} onToggleFavorite={handleToggleFavorite} />
             ))}
           </AnimatePresence>

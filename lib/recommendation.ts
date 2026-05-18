@@ -1,6 +1,13 @@
 import { createBrowserClient } from '@supabase/ssr';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type MatchType =
+  | 'followed_community'
+  | 'full'
+  | 'city'
+  | 'interest'
+  | 'none';
 
 export interface RecommendedEvent {
   id: string;
@@ -15,16 +22,11 @@ export interface RecommendedEvent {
   cover_image_url: string | null;
   total_capacity: number;
   tags: string[];
+  community_id: string | null;
   attendeesCount: number;
-  tier: 'A' | 'B' | 'C';
+  relevanceScore: number;
+  matchType: MatchType;
 }
-
-interface UserPrefs {
-  city: string | null;
-  preferences: string[] | null;
-}
-
-// ─── Supabase client (browser) ────────────────────────────────────────────────
 
 function getClient() {
   return createBrowserClient(
@@ -33,111 +35,71 @@ function getClient() {
   );
 }
 
-const EVENT_SELECT = 'id,title,category,location,is_online,is_paid,price,start_at,end_at,cover_image_url,total_capacity,tags,event_attendees(count)';
-const TIER_A_MIN = 3;
-const TIER_B_MIN = 3;
-const RESULT_LIMIT = 12;
-
-function toEvent(row: any, tier: 'A' | 'B' | 'C'): RecommendedEvent {
-  return {
-    ...row,
-    attendeesCount: row.event_attendees?.[0]?.count ?? 0,
-    tier,
-  };
-}
-
-// ─── Ana Fonksiyon ────────────────────────────────────────────────────────────
+// ─── Kişiselleştirilmiş (giriş yapmış kullanıcı) ─────────────────────────────
 
 export async function getRecommendedEvents(userId: string): Promise<RecommendedEvent[]> {
   const supabase = getClient();
-  const now = new Date().toISOString();
 
-  // Kullanıcı tercihlerini çek
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('city, preferences')
-    .eq('id', userId)
-    .single<UserPrefs>();
+  const { data, error } = await supabase.rpc('get_personalized_events', {
+    p_user_id: userId,
+  });
 
-  const city = profile?.city?.trim() || null;
-  const prefs = profile?.preferences?.length ? profile.preferences : null;
+  if (error) {
+    console.error('[recommendation] RPC hatası:', error.message);
+    // RPC başarısız olursa fallback
+    return getPopularEvents();
+  }
 
-  // ── Tier A + B paralel sorgu ───────────────────────────────────────────────
-  const baseQuery = () =>
-    supabase
-      .from('events')
-      .select(EVENT_SELECT)
-      .eq('status', 'published')
-      .gte('end_at', now)
-      .order('start_at', { ascending: true });
-
-  const [tierAResult, tierBResult] = await Promise.all([
-    // Tier A: şehir + kategori eşleşmesi
-    city && prefs
-      ? baseQuery()
-          .ilike('location', `%${city}%`)
-          .in('category', prefs)
-          .limit(RESULT_LIMIT)
-      : Promise.resolve({ data: [] }),
-
-    // Tier B: sadece şehir
-    city
-      ? baseQuery()
-          .ilike('location', `%${city}%`)
-          .limit(RESULT_LIMIT)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const tierA = (tierAResult.data || []).map((r) => toEvent(r, 'A'));
-
-  if (tierA.length >= TIER_A_MIN) return tierA;
-
-  // Tier A yetersiz — Tier B'den Tier A'da olmayanları ekle
-  const tierAIds = new Set(tierA.map((e) => e.id));
-  const tierBExtra = (tierBResult.data || [])
-    .filter((r: any) => !tierAIds.has(r.id))
-    .map((r: any) => toEvent(r, 'B'));
-
-  const combined = [...tierA, ...tierBExtra];
-
-  if (combined.length >= TIER_B_MIN) return combined.slice(0, RESULT_LIMIT);
-
-  // ── Tier C: genel popüler ──────────────────────────────────────────────────
-  const combinedIds = new Set(combined.map((e) => e.id));
-
-  const { data: tierCRaw } = await supabase
-    .from('events')
-    .select(EVENT_SELECT)
-    .eq('status', 'published')
-    .gte('end_at', now)
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  const tierC = (tierCRaw || [])
-    .filter((r: any) => !combinedIds.has(r.id))
-    .map((r: any) => toEvent(r, 'C'))
-    // Client-side sort by attendee count (Supabase ilişki üzerinden order desteklemiyor)
-    .sort((a, b) => b.attendeesCount - a.attendeesCount)
-    .slice(0, RESULT_LIMIT - combined.length);
-
-  return [...combined, ...tierC].slice(0, RESULT_LIMIT);
+  return (data || []).map((row: any): RecommendedEvent => ({
+    id:               row.id,
+    title:            row.title,
+    category:         row.category,
+    location:         row.location,
+    is_online:        row.is_online,
+    is_paid:          row.is_paid,
+    price:            row.price,
+    start_at:         row.start_at,
+    end_at:           row.end_at,
+    cover_image_url:  row.cover_image_url,
+    total_capacity:   row.total_capacity,
+    tags:             row.tags || [],
+    community_id:     row.community_id,
+    attendeesCount:   Number(row.attendees_count) || 0,
+    relevanceScore:   row.relevance_score || 0,
+    matchType:        row.match_type || 'none',
+  }));
 }
 
-// ─── Kullanım kolaylığı: auth olmadan genel popüler ───────────────────────────
+// ─── Genel popüler (giriş yapmamış kullanıcı) ────────────────────────────────
 
 export async function getPopularEvents(): Promise<RecommendedEvent[]> {
   const supabase = getClient();
-  const now = new Date().toISOString();
 
-  const { data } = await supabase
-    .from('events')
-    .select(EVENT_SELECT)
-    .eq('status', 'published')
-    .gte('end_at', now)
-    .order('created_at', { ascending: false })
-    .limit(12);
+  const { data, error } = await supabase.rpc('get_personalized_events', {
+    p_user_id: null,
+  });
 
-  return (data || [])
-    .map((r: any) => toEvent(r, 'C'))
-    .sort((a, b) => b.attendeesCount - a.attendeesCount);
+  if (error) {
+    console.error('[recommendation] getPopularEvents hatası:', error.message);
+    return [];
+  }
+
+  return (data || []).map((row: any): RecommendedEvent => ({
+    id:               row.id,
+    title:            row.title,
+    category:         row.category,
+    location:         row.location,
+    is_online:        row.is_online,
+    is_paid:          row.is_paid,
+    price:            row.price,
+    start_at:         row.start_at,
+    end_at:           row.end_at,
+    cover_image_url:  row.cover_image_url,
+    total_capacity:   row.total_capacity,
+    tags:             row.tags || [],
+    community_id:     row.community_id,
+    attendeesCount:   Number(row.attendees_count) || 0,
+    relevanceScore:   row.relevance_score || 0,
+    matchType:        'none',
+  }));
 }

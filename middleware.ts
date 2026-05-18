@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED_ROUTES = [
   "/dashboard", "/create-event", "/event-detail", "/settings",
-  "/live-stream", "/nearby", "/trends", "/calendar", "/my-events",
+  "/live-stream", "/nearby", "/trends", "/calendar", "/my-events",  '/community',  
 ];
 
 const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password", "/onboarding"];

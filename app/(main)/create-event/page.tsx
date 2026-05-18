@@ -1,609 +1,626 @@
 'use client';
 
-import React, { useState, useEffect, useRef, ChangeEvent, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { useForm } from 'react-hook-form';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Search, Bell, Settings, UserCircle, Loader2, CloudUpload, X,
-  ImageIcon, MapPin, Globe, Calendar, Link as LinkIcon, Ticket,
-  Users, Bold, Italic, Hash, Music2, Cpu, Palette, Briefcase,
-  PartyPopper, Dumbbell, Gamepad2, ChevronRight, Clock,
-  ArrowLeft, Sparkles,
+  CloudUpload, X, MapPin, Globe, Calendar, Clock,
+  Users, Loader2, Zap, ChevronLeft, Check, Pencil,
+  Music2, Cpu, Palette, Briefcase, PartyPopper,
+  Dumbbell, Gamepad2, AlertCircle, TicketIcon,
+  User, Users2,
 } from 'lucide-react';
 
-// Leaflet CSS — sadece client'ta yükle
-if (typeof window !== 'undefined') {
-  import('leaflet/dist/leaflet.css' as any);
-}
-
-const LocationPicker = dynamic(() => import('@/components/ui/LocationPicker'), {
+const LocationPickerInline = dynamic(() => import('@/components/ui/LocationPicker'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-56 rounded-2xl bg-slate-100 flex items-center justify-center">
-      <Loader2 size={20} className="animate-spin text-slate-400" />
+    <div className="w-full h-[320px] rounded-2xl bg-slate-100 flex items-center justify-center">
+      <Loader2 size={18} className="animate-spin text-slate-400" />
     </div>
   ),
 });
 
-// ─── Sabitler ───────────────────────────────────────────────────────────────
+// ─── Sabitler ─────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { value: 'music',    label: 'Müzik',      icon: Music2,      color: 'from-pink-500 to-rose-500',    bg: 'bg-pink-50',    ring: 'ring-pink-400',    text: 'text-pink-600' },
-  { value: 'tech',     label: 'Teknoloji',  icon: Cpu,         color: 'from-blue-500 to-cyan-500',    bg: 'bg-blue-50',    ring: 'ring-blue-400',    text: 'text-blue-600' },
-  { value: 'art',      label: 'Sanat',      icon: Palette,     color: 'from-violet-500 to-purple-500',bg: 'bg-violet-50',  ring: 'ring-violet-400',  text: 'text-violet-600' },
-  { value: 'business', label: 'İş',         icon: Briefcase,   color: 'from-amber-500 to-orange-500', bg: 'bg-amber-50',   ring: 'ring-amber-400',   text: 'text-amber-600' },
-  { value: 'social',   label: 'Sosyal',     icon: PartyPopper, color: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50', ring: 'ring-emerald-400', text: 'text-emerald-600' },
-  { value: 'sport',    label: 'Spor',       icon: Dumbbell,    color: 'from-orange-500 to-red-500',   bg: 'bg-orange-50',  ring: 'ring-orange-400',  text: 'text-orange-600' },
-  { value: 'game',     label: 'Oyun',       icon: Gamepad2,    color: 'from-indigo-500 to-blue-600',  bg: 'bg-indigo-50',  ring: 'ring-indigo-400',  text: 'text-indigo-600' },
+  { value: 'music',    label: 'Müzik',      icon: Music2 },
+  { value: 'tech',     label: 'Teknoloji',  icon: Cpu },
+  { value: 'art',      label: 'Sanat',      icon: Palette },
+  { value: 'business', label: 'İş',         icon: Briefcase },
+  { value: 'social',   label: 'Sosyal',     icon: PartyPopper },
+  { value: 'sport',    label: 'Spor',       icon: Dumbbell },
+  { value: 'game',     label: 'Oyun',       icon: Gamepad2 },
 ];
 
-const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all';
+function toDateLocal(d: Date) { return d.toISOString().slice(0, 10); }
+function toTimeLocal(d: Date) { return d.toTimeString().slice(0, 5); }
 
-// ─── Bileşenler ─────────────────────────────────────────────────────────────
+// ─── AutoTextarea ─────────────────────────────────────────────────────────────
 
-function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.05)] p-6 md:p-8 ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function SectionTitle({ icon: Icon, label, color = 'text-blue-600' }: { icon: any; label: string; color?: string }) {
-  return (
-    <h2 className={`flex items-center gap-2.5 text-sm font-bold text-slate-800 mb-5 uppercase tracking-widest`}>
-      <Icon size={16} className={color} />
-      {label}
-    </h2>
-  );
-}
-
-// Styled date input
-function DateInput({ label, required, ...props }: any) {
-  return (
-    <div className="flex-1">
-      <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-        {label} {required && <span className="text-red-400">*</span>}
-      </label>
-      <div className="relative">
-        <Calendar size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
-        <input
-          type="date"
-          className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all cursor-pointer [color-scheme:light]"
-          {...props}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TimeInput({ label, ...props }: any) {
-  return (
-    <div className="w-32">
-      <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-        {label}
-      </label>
-      <div className="relative">
-        <Clock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
-        <input
-          type="time"
-          className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all cursor-pointer [color-scheme:light]"
-          {...props}
-        />
-      </div>
-    </div>
-  );
-}
-
-// Auto-resize textarea
-function SmartTextarea({ value, onChange, placeholder }: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
+function AutoTextarea({ value, onChange, placeholder }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-
-  const resize = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, 140)}px`;
-  }, []);
+    el.style.height = `${Math.max(el.scrollHeight, 80)}px`;
+  }, [value]);
+  return (
+    <textarea ref={ref} value={value} onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder} style={{ resize: 'none', overflow: 'hidden' }}
+      className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none leading-relaxed min-h-[80px]" />
+  );
+}
 
-  useEffect(() => { resize(); }, [value, resize]);
+// ─── Location Modal ───────────────────────────────────────────────────────────
 
-  const wrap = (prefix: string, suffix: string) => {
-    const el = ref.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const selected = value.slice(start, end);
-    const newVal = value.slice(0, start) + prefix + selected + suffix + value.slice(end);
-    onChange(newVal);
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + prefix.length, end + prefix.length);
-    }, 0);
+function LocationModal({ onConfirm, onClose, initial }: {
+  onConfirm: (address: string, lat: number, lng: number) => void;
+  onClose: () => void;
+  initial?: { address: string; lat: number; lng: number } | null;
+}) {
+  const [pending, setPending] = useState<{ address: string; lat: number; lng: number } | null>(initial || null);
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+      onClick={onClose}>
+      <motion.div initial={{ scale: 0.95, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95 }}
+        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <p className="text-sm font-bold text-slate-900">Konum Seç</p>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"><X size={15} /></button>
+        </div>
+        <div className="p-4">
+          <LocationPickerInline onLocationSelect={(a, lat, lng) => setPending({ address: a, lat, lng })} initialAddress={initial?.address} />
+        </div>
+        {pending && (
+          <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl">
+            <MapPin size={12} className="text-blue-500 shrink-0" />
+            <span className="text-xs font-medium text-blue-700 flex-1 truncate">{pending.address}</span>
+          </div>
+        )}
+        <div className="px-4 pb-4 flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">İptal</button>
+          <button onClick={() => { if (pending) { onConfirm(pending.address, pending.lat, pending.lng); onClose(); }}}
+            disabled={!pending}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
+            <Check size={14} /> Onayla
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Topluluk Seçim Ekranı ────────────────────────────────────────────────────
+
+interface UserCommunity {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  category: string | null;
+  member_count: number;
+}
+
+function CommunitySelector({ communities, onSelect }: {
+  communities: UserCommunity[];
+  onSelect: (communityId: string | null) => void;
+}) {
+  const CAT_GRADIENTS: Record<string, string> = {
+    music: 'from-pink-400 to-rose-500', tech: 'from-blue-400 to-blue-600',
+    art: 'from-violet-400 to-purple-600', business: 'from-amber-400 to-orange-500',
+    social: 'from-emerald-400 to-teal-500', sport: 'from-orange-400 to-red-500',
+    game: 'from-indigo-400 to-blue-600',
   };
 
   return (
-    <div className="group">
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 mb-2 p-1.5 bg-slate-50 border border-slate-200 rounded-xl w-fit">
-        {[
-          { icon: Bold,   title: 'Kalın',   action: () => wrap('**', '**') },
-          { icon: Italic, title: 'İtalik',  action: () => wrap('_', '_') },
-          { icon: Hash,   title: 'Başlık',  action: () => wrap('## ', '') },
-          { icon: LinkIcon, title: 'Link',  action: () => wrap('[', '](url)') },
-        ].map(({ icon: Icon, title, action }) => (
-          <button
-            key={title}
-            type="button"
-            title={title}
-            onClick={action}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm transition-all"
-          >
-            <Icon size={13} />
-          </button>
-        ))}
-        <div className="w-px h-4 bg-slate-200 mx-1" />
-        <span className="text-[10px] text-slate-400 font-medium px-1 flex items-center gap-1">
-          <Sparkles size={10} /> Markdown desteklenir
-        </span>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen bg-[#f5f7f9] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-lg p-8 flex flex-col gap-6">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 mx-auto mb-4">
+            <Zap size={22} className="text-white" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Bu etkinlik kim için?</h2>
+          <p className="text-sm text-slate-400 mt-2">Kişisel bir etkinlik mi oluşturuyorsunuz, yoksa topluluğunuz için mi?</p>
+        </div>
 
-      <textarea
-        ref={ref}
-        value={value}
-        onChange={(e) => { onChange(e.target.value); resize(); }}
-        placeholder={placeholder}
-        rows={5}
-        style={{ resize: 'none', overflow: 'hidden' }}
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all leading-relaxed"
-      />
-    </div>
-  );
-}
-
-// TopBar
-function TopBar() {
-  const router = useRouter();
-  return (
-    <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-6 md:px-10 h-16">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
-        >
-          <ArrowLeft size={17} />
-        </button>
-        <span className="text-base font-bold text-slate-900">Yeni Etkinlik</span>
-      </div>
-      <div className="flex items-center gap-1">
-        {[Search, Settings].map((Icon, i) => (
-          <button key={i} onClick={() => Icon === Settings ? router.push('/settings') : undefined} className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors">
-            <Icon size={17} />
+        <div className="flex flex-col gap-3">
+          {/* Kişisel */}
+          <button onClick={() => onSelect(null)}
+            className="flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30 transition-all group text-left">
+            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+              <User size={22} className="text-slate-500 group-hover:text-blue-600 transition-colors" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-slate-900">Kişisel Etkinlik</p>
+              <p className="text-xs text-slate-400 mt-0.5">Sadece senin adına yayınlanır.</p>
+            </div>
+            <ChevronLeft size={16} className="text-slate-300 rotate-180 group-hover:text-blue-400 transition-colors" />
           </button>
-        ))}
-        <button className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors relative">
-          <Bell size={17} />
-          <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-red-500" />
-        </button>
-        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center ml-1">
-          <UserCircle size={20} className="text-slate-500" />
+
+          {/* Topluluklar */}
+          {communities.map(c => {
+            const grad = c.category ? CAT_GRADIENTS[c.category] : 'from-blue-400 to-blue-600';
+            const initials = c.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+            return (
+              <button key={c.id} onClick={() => onSelect(c.id)}
+                className="flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30 transition-all group text-left">
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm overflow-hidden`}>
+                  {c.avatar_url
+                    ? <img src={c.avatar_url} alt={c.name} className="w-full h-full object-cover" />
+                    : initials
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-900 truncate">{c.name}</p>
+                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1"><Users size={10} />{c.member_count} üye</p>
+                </div>
+                <ChevronLeft size={16} className="text-slate-300 rotate-180 group-hover:text-blue-400 transition-colors" />
+              </button>
+            );
+          })}
         </div>
       </div>
-    </header>
+    </motion.div>
   );
 }
 
-// ─── Ana Bileşen ─────────────────────────────────────────────────────────────
+// ─── Option Row ───────────────────────────────────────────────────────────────
 
-export default function CreateEvent() {
+function OptionRow({ icon: Icon, label, value, onClick }: {
+  icon: any; label: string; value: React.ReactNode; onClick?: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick}
+      className="w-full flex items-center gap-3 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors rounded-lg px-2 -mx-2 group text-left">
+      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-slate-200 transition-colors">
+        <Icon size={14} className="text-slate-500" />
+      </div>
+      <span className="flex-1 text-sm font-medium text-slate-700">{label}</span>
+      <span className="text-sm font-semibold text-slate-400 flex items-center gap-1.5">
+        {value}
+        <Pencil size={12} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+      </span>
+    </button>
+  );
+}
+
+// ─── Ana Bileşen ──────────────────────────────────────────────────────────────
+
+export default function CreateEventPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
+  const presetCommunityId = searchParams.get('community_id');
+  const isEdit = !!editId;
+
+  const [step, setStep] = useState<'select' | 'form'>('form');
+  const [userCommunities, setUserCommunities] = useState<UserCommunity[]>([]);
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(presetCommunityId || null);
+  const [selectedCommunityName, setSelectedCommunityName] = useState<string>('');
+
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [existingCoverUrl, setExistingCoverUrl] = useState<string | null>(null);
+
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedFormat, setSelectedFormat] = useState<'physical' | 'online'>('physical');
-  const [selectedTicket, setSelectedTicket] = useState<'free' | 'paid'>('paid');
-  const [tags, setTags] = useState<string[]>([]);
+  const [isPaid, setIsPaid] = useState(false);
+  const [price, setPrice] = useState('');
+  const [capacity, setCapacity] = useState('');
   const [locationData, setLocationData] = useState<{ address: string; lat: number; lng: number } | null>(null);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [dateError, setDateError] = useState('');
 
-  const { register, handleSubmit, watch, setValue, getValues } = useForm({
-    defaultValues: {
-      title: '', capacity: '', startDate: '', startTime: '',
-      endDate: '', endTime: '', location: '', price: '',
-    },
-  });
+  const [showPriceEdit, setShowPriceEdit] = useState(false);
+  const [showCapEdit, setShowCapEdit] = useState(false);
 
-  const todayDate = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const plus1h = new Date(now.getTime() + 3600000);
+  const [startDate, setStartDate] = useState(toDateLocal(now));
+  const [startTime, setStartTime] = useState(toTimeLocal(now));
+  const [endDate, setEndDate] = useState(toDateLocal(plus1h));
+  const [endTime, setEndTime] = useState(toTimeLocal(plus1h));
+  const todayDate = toDateLocal(new Date());
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/login'); return; }
+
+      // Kullanıcının kurduğu toplulukları çek
+      const { data: comms } = await supabase
+        .from('community_members')
+        .select('communities(id, name, avatar_url, category, member_count)')
+        .eq('user_id', user.id)
+        .eq('role', 'founder');
+
+      const communities = (comms || [])
+        .map((c: any) => c.communities)
+        .filter(Boolean) as UserCommunity[];
+
+      setUserCommunities(communities);
+
+      // Eğer edit değilse ve topluluk varsa seçim ekranı göster
+      if (!isEdit && !presetCommunityId && communities.length > 0) {
+        setStep('select');
+      }
+
+      // Edit modu
+      if (isEdit && editId) {
+        const { data, error } = await supabase.from('events').select('*').eq('id', editId).single();
+        if (error || !data) { toast.error('Etkinlik bulunamadı.'); router.push('/my-events'); return; }
+        setTitle(data.title || '');
+        setCapacity(String(data.total_capacity || ''));
+        setPrice(String(data.price || ''));
+        setDescription(data.long_description || '');
+        setSelectedCategory(data.category || '');
+        setSelectedFormat(data.is_online ? 'online' : 'physical');
+        setIsPaid(data.is_paid || false);
+        setExistingCoverUrl(data.cover_image_url || null);
+        setSelectedCommunityId(data.community_id || null);
+        const s = new Date(data.start_at), e = new Date(data.end_at);
+        setStartDate(toDateLocal(s)); setStartTime(toTimeLocal(s));
+        setEndDate(toDateLocal(e)); setEndTime(toTimeLocal(e));
+        if (data.latitude && data.longitude) {
+          setLocationData({ address: data.location, lat: data.latitude, lng: data.longitude });
+        }
+      }
+
+      // Preset community_id varsa ismini bul
+      if (presetCommunityId && communities.length > 0) {
+        const found = communities.find(c => c.id === presetCommunityId);
+        if (found) setSelectedCommunityName(found.name);
+      }
+
+      setPageLoading(false);
+    })();
+  }, [editId, presetCommunityId, isEdit]);
+
+  const handleCommunitySelect = (communityId: string | null) => {
+    setSelectedCommunityId(communityId);
+    if (communityId) {
+      const found = userCommunities.find(c => c.id === communityId);
+      setSelectedCommunityName(found?.name || '');
+    } else {
+      setSelectedCommunityName('');
+    }
+    setStep('form');
+  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert('Dosya 5MB\'dan küçük olmalıdır.'); e.target.value = ''; return; }
+    const file = e.target.files?.[0]; if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error('Maks. 5MB'); e.target.value = ''; return; }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setCoverFile(file);
   };
-
-  const handleRemoveCover = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setCoverFile(null);
-  };
-
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const val = e.currentTarget.value.trim().toLowerCase();
-    if (val && !tags.includes(val) && tags.length < 5) {
-      setTags([...tags, val]);
-      e.currentTarget.value = '';
-    }
+  const validateDates = () => {
+    const s = new Date(`${startDate}T${startTime}`), e = new Date(`${endDate}T${endTime}`);
+    if (e <= s) { setDateError('Bitiş başlangıçtan sonra olmalı.'); return false; }
+    setDateError(''); return true;
   };
 
-  const submitEvent = async (data: any, status: 'draft' | 'published') => {
-    if (!data.title?.trim())       { setErrorMsg('Etkinlik adı zorunludur.'); return; }
-    if (!selectedCategory)         { setErrorMsg('Kategori seçimi zorunludur.'); return; }
-    if (!data.capacity || Number(data.capacity) <= 0) { setErrorMsg('Geçerli bir kontenjan giriniz.'); return; }
-    if (!data.startDate || !data.startTime) { setErrorMsg('Başlangıç tarihi ve saati zorunludur.'); return; }
-    if (!data.endDate || !data.endTime)     { setErrorMsg('Bitiş tarihi ve saati zorunludur.'); return; }
-
-    const startAt = new Date(`${data.startDate}T${data.startTime}:00`).toISOString();
-    const endAt   = new Date(`${data.endDate}T${data.endTime}:00`).toISOString();
-
-    if (new Date(endAt) <= new Date(startAt)) { setErrorMsg('Bitiş tarihi başlangıçtan sonra olmalıdır.'); return; }
-    if (selectedTicket === 'paid' && (!data.price || Number(data.price) <= 0)) {
-      setErrorMsg('Ücretli etkinlikler için geçerli bir fiyat giriniz.'); return;
-    }
+  const submit = async (status: 'draft' | 'published') => {
+    if (!title.trim()) { toast.error('Etkinlik adı zorunludur.'); return; }
+    if (!selectedCategory) { toast.error('Kategori seçiniz.'); return; }
+    if (!capacity || Number(capacity) <= 0) { toast.error('Kontenjan giriniz.'); return; }
+    if (!validateDates()) return;
+    if (isPaid && (!price || Number(price) <= 0)) { toast.error('Fiyat giriniz.'); return; }
 
     setLoading(true);
-    setErrorMsg(null);
-
     try {
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !user) throw new Error('Etkinlik oluşturmak için giriş yapmalısınız.');
+      if (authErr || !user) throw new Error('Giriş yapmalısınız.');
 
-      let coverUrl: string | null = null;
+      let coverUrl: string | null = existingCoverUrl;
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
-        const { error: uploadErr } = await supabase.storage.from('event_covers').upload(fileName, coverFile, { upsert: false });
-        if (uploadErr) throw new Error(`Kapak yüklenemedi: ${uploadErr.message}`);
-        coverUrl = supabase.storage.from('event_covers').getPublicUrl(fileName).data.publicUrl;
+        const ext = coverFile.name.split('.').pop();
+        const fn = `${user.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('event_covers').upload(fn, coverFile);
+        if (upErr) throw new Error(upErr.message);
+        coverUrl = supabase.storage.from('event_covers').getPublicUrl(fn).data.publicUrl;
       }
 
-      const payload = {
-        title: data.title.trim(),
+      const payload: any = {
+        title: title.trim(),
         category: selectedCategory,
-        total_capacity: Number(data.capacity),
+        total_capacity: Number(capacity),
         long_description: description.trim() || null,
-        start_at: startAt,
-        end_at: endAt,
-        location: locationData?.address || data.location?.trim() || 'Belirtilmedi',
+        start_at: new Date(`${startDate}T${startTime}`).toISOString(),
+        end_at: new Date(`${endDate}T${endTime}`).toISOString(),
+        location: locationData?.address || 'Belirtilmedi',
         latitude: locationData?.lat ?? null,
         longitude: locationData?.lng ?? null,
         is_online: selectedFormat === 'online',
-        is_paid: selectedTicket === 'paid',
-        price: selectedTicket === 'paid' ? Number(data.price) : 0,
+        is_paid: isPaid,
+        price: isPaid ? Number(price) : 0,
         status,
-        tags,
-        organizer_id: user.id,
         cover_image_url: coverUrl,
+        community_id: selectedCommunityId || null,
       };
 
-      const { data: newEvent, error: dbErr } = await supabase.from('events').insert([payload]).select('id').single();
-      if (dbErr) throw dbErr;
-
-      if (status === 'published' && newEvent) {
-        supabase.from('activity_feed').insert([{
-          activity_type: 'event_created',
-          user_id: user.id,
-          event_id: newEvent.id,
-          metadata: { category: payload.category },
-        }]).then(({ error }: { error: { message: string } | null }) => {
-          if (error) console.error('activity_feed insert failed:', error.message);
-        });
+      if (isEdit && editId) {
+        const { error: e } = await supabase.from('events').update(payload).eq('id', editId);
+        if (e) throw e;
+      } else {
+        const { data: ev, error: e } = await supabase.from('events')
+          .insert([{ ...payload, organizer_id: user.id }]).select('id').single();
+        if (e) throw e;
+        if (status === 'published' && ev) {
+          supabase.from('activity_feed').insert([{
+            activity_type: 'event_created', user_id: user.id, event_id: ev.id,
+            metadata: { category: payload.category },
+          }]).then(({ error }: { error: { message: string } | null }) => {
+            if (error) console.error(error.message);
+          });
+        }
       }
 
-      router.push('/dashboard');
-    } catch (error: any) {
-      setErrorMsg(error?.message || 'Bilinmeyen bir hata oluştu.');
-    } finally {
-      setLoading(false);
-    }
+      toast.success(status === 'published'
+        ? (isEdit ? 'Güncellendi!' : selectedCommunityId ? 'Topluluk etkinliği yayınlandı! 🎉' : 'Etkinlik yayınlandı! 🎉')
+        : 'Taslak kaydedildi.');
+      router.push(selectedCommunityId ? `/community/${selectedCommunityId}` : '/my-events');
+    } catch (err: any) {
+      toast.error(err?.message || 'Bir hata oluştu.');
+    } finally { setLoading(false); }
   };
 
+  const displayCover = previewUrl || existingCoverUrl;
+
+  if (pageLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 size={22} className="animate-spin text-slate-400" />
+    </div>
+  );
+
+  // Topluluk seçim ekranı
+  if (step === 'select') {
+    return <CommunitySelector communities={userCommunities} onSelect={handleCommunitySelect} />;
+  }
+
   return (
-    <div className="flex flex-col w-full min-h-screen bg-[#f5f7f9]">
-      <TopBar />
-
-      <main className="flex-1 px-4 md:px-10 py-8 max-w-7xl mx-auto w-full">
-
-        {/* Page Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium mb-2">
-            <span>Dashboard</span>
-            <ChevronRight size={12} />
-            <span>Etkinliklerim</span>
-            <ChevronRight size={12} />
-            <span className="text-slate-600">Yeni Etkinlik</span>
-          </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">Etkinlik Oluştur</h1>
-          <p className="text-slate-400 text-sm mt-1">Topluluğunuz için unutulmaz bir deneyim tasarlayın.</p>
-        </div>
-
-        {errorMsg && (
-          <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-100 text-sm font-semibold text-red-600 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-200">
-            <span>{errorMsg}</span>
-            <button type="button" onClick={() => setErrorMsg(null)} className="hover:text-red-800 transition-colors"><X size={15} /></button>
+    <div className="min-h-screen bg-[#f5f7f9] py-8 px-4">
+      {/* Back */}
+      <div className="max-w-4xl mx-auto mb-5 flex items-center gap-3">
+        <button onClick={() => userCommunities.length > 0 && !isEdit ? setStep('select') : router.back()}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors group">
+          <ChevronLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
+          Geri
+        </button>
+        {selectedCommunityId && selectedCommunityName && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-full">
+            <Users2 size={13} className="text-blue-500" />
+            <span className="text-xs font-semibold text-blue-700">{selectedCommunityName} için etkinlik</span>
           </div>
         )}
+      </div>
 
-        <form
-          onSubmit={handleSubmit((data) => submitEvent(data, 'published'))}
-          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
-        >
+      <div className="max-w-4xl mx-auto bg-white rounded-[28px] shadow-[0_8px_40px_rgba(0,0,0,0.10)] overflow-hidden">
+        <div className="flex flex-col md:flex-row">
 
-          {/* ── SOL KOLON ── */}
-          <div className="lg:col-span-8 flex flex-col gap-6">
-
-            {/* 1. KAPAK FOTOĞRAFI */}
-            <SectionCard>
-              <SectionTitle icon={ImageIcon} label="Kapak Fotoğrafı" />
-              {!previewUrl ? (
-                <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl py-14 flex flex-col items-center gap-4 cursor-pointer transition-all bg-slate-50/50 hover:bg-blue-50/30 group">
-                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFileChange} className="hidden" />
-                  <div className="w-14 h-14 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center group-hover:scale-110 group-hover:shadow-md transition-all duration-300">
-                    <CloudUpload size={24} className="text-blue-500" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-bold text-slate-700">Görseli sürükle veya seç</p>
-                    <p className="text-xs text-slate-400 mt-1">PNG, JPG veya WEBP — Maks. 5MB, 16:9 önerilir</p>
-                  </div>
-                </label>
-              ) : (
-                <div className="relative w-full h-64 md:h-[380px] rounded-2xl overflow-hidden group border border-slate-200">
-                  <Image src={previewUrl} alt="Kapak önizleme" fill className="object-cover" />
-                  <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-sm">
-                    <button onClick={handleRemoveCover} className="px-5 py-2.5 bg-red-500 text-white rounded-full font-semibold text-sm flex items-center gap-2 hover:bg-red-600 transition-all hover:scale-105 shadow-lg">
-                      <X size={15} /> Değiştir
-                    </button>
-                  </div>
+          {/* SOL — Kapak */}
+          <div className="md:w-72 shrink-0 bg-slate-50 flex flex-col items-center justify-start p-5 gap-4 border-r border-slate-100">
+            {!displayCover ? (
+              <label className="w-full aspect-square flex flex-col items-center justify-center gap-3 cursor-pointer rounded-2xl border-2 border-dashed border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 transition-all group">
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFileChange} className="hidden" />
+                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center group-hover:scale-110 transition-all">
+                  <CloudUpload size={20} className="text-blue-400" />
                 </div>
-              )}
-            </SectionCard>
-
-            {/* 2. TEMEL BİLGİLER */}
-            <SectionCard>
-              <SectionTitle icon={Sparkles} label="Temel Bilgiler" />
-
-              {/* Format Toggle */}
-              <div className="flex p-1 bg-slate-100 rounded-xl w-full max-w-xs mb-6">
-                {(['physical', 'online'] as const).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setSelectedFormat(f)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${selectedFormat === f ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    {f === 'physical' ? <><MapPin size={13} /> Fiziksel</> : <><Globe size={13} /> Online</>}
+                <div className="text-center">
+                  <p className="text-xs font-bold text-slate-600">Kapak Fotoğrafı</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">PNG · JPG · Maks 5MB</p>
+                </div>
+              </label>
+            ) : (
+              <div className="relative w-full aspect-square rounded-2xl overflow-hidden group">
+                <Image src={displayCover} alt="Kapak" fill className="object-cover" unoptimized />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <button type="button"
+                    onClick={() => { setPreviewUrl(null); setCoverFile(null); setExistingCoverUrl(null); }}
+                    className="px-4 py-2 bg-white text-slate-800 rounded-full text-xs font-bold hover:bg-red-50 hover:text-red-500 transition-colors flex items-center gap-1.5">
+                    <X size={12} /> Kaldır
                   </button>
-                ))}
-              </div>
-
-              {/* Etkinlik Adı */}
-              <div className="mb-5">
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                  Etkinlik Adı <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register('title')}
-                  placeholder="Örn: Yaz Ortası Caz Festivali"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
-                />
-              </div>
-
-              {/* Kategori Kartları */}
-              <div className="mb-5">
-                <label className="block text-xs font-semibold text-slate-500 mb-3 uppercase tracking-wider">
-                  Kategori <span className="text-red-400">*</span>
-                </label>
-                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                  {CATEGORIES.map(({ value, label, icon: Icon, bg, ring, text, color }) => {
-                    const isActive = selectedCategory === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setSelectedCategory(value)}
-                        className={`flex flex-col items-center gap-2 py-3 px-2 rounded-2xl border-2 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                          isActive
-                            ? `${bg} border-transparent ring-2 ${ring} shadow-sm`
-                            : 'bg-white border-slate-100 hover:border-slate-200'
-                        }`}
-                      >
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isActive ? `bg-gradient-to-br ${color}` : 'bg-slate-100'}`}>
-                          <Icon size={15} className={isActive ? 'text-white' : 'text-slate-500'} />
-                        </div>
-                        <span className={`text-[10px] font-bold leading-none ${isActive ? text : 'text-slate-500'}`}>{label}</span>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
-
-              {/* Etiketler */}
-              <div className="mb-5">
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                  Etiketler <span className="text-slate-400 normal-case font-normal">(maks. 5)</span>
-                </label>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-blue-500/40 transition-all">
-                  {tags.map((tag) => (
-                    <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold">
-                      #{tag}
-                      <button type="button" onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-red-500 transition-colors"><X size={11} /></button>
-                    </span>
-                  ))}
-                  <input
-                    type="text"
-                    onKeyDown={addTag}
-                    placeholder={tags.length < 5 ? "Etiket ekle, Enter'a bas..." : 'Maks. etikete ulaşıldı'}
-                    disabled={tags.length >= 5}
-                    className="flex-1 min-w-[140px] bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none px-2 py-1"
-                  />
-                </div>
-              </div>
-
-              {/* Açıklama */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                  Etkinlik Açıklaması
-                </label>
-                <SmartTextarea
-                  value={description}
-                  onChange={setDescription}
-                  placeholder="Katılımcılara neler sunuyor? Program, konuşmacılar, özel detaylar..."
-                />
-              </div>
-            </SectionCard>
+            )}
           </div>
 
-          {/* ── SAĞ KOLON ── */}
-          <div className="lg:col-span-4 flex flex-col gap-6 sticky top-24 h-fit">
+          {/* SAĞ — Form */}
+          <div className="flex-1 flex flex-col p-6 md:p-8 gap-0">
 
-            {/* 3. ZAMAN ÇİZELGESİ */}
-            <SectionCard>
-              <SectionTitle icon={Calendar} label="Tarih & Saat" color="text-violet-500" />
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Başlangıç <span className="text-red-400">*</span></p>
-                  <div className="flex gap-2">
-                    <DateInput min={todayDate} {...register('startDate')} />
-                    <TimeInput label="Saat" {...register('startTime')} />
-                  </div>
-                </div>
-                <div className="w-full h-px bg-slate-100" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Bitiş <span className="text-red-400">*</span></p>
-                  <div className="flex gap-2">
-                    <DateInput min={todayDate} {...register('endDate')} />
-                    <TimeInput label="Saat" {...register('endTime')} />
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
+            {/* Başlık */}
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+              placeholder="Etkinlik Adı"
+              className="w-full text-3xl md:text-4xl font-black text-slate-900 placeholder:text-slate-200 focus:outline-none bg-transparent mb-6 leading-tight" />
 
-            {/* 4. KONUM */}
-            <SectionCard>
-              <SectionTitle
-                icon={selectedFormat === 'physical' ? MapPin : LinkIcon}
-                label={selectedFormat === 'physical' ? 'Konum' : 'Erişim Linki'}
-                color={selectedFormat === 'physical' ? 'text-rose-500' : 'text-emerald-500'}
-              />
-              {selectedFormat === 'physical' ? (
-                <LocationPicker
-                  onLocationSelect={(address, lat, lng) => {
-                    setLocationData({ address, lat, lng });
-                    setValue('location', address);
-                  }}
-                  initialAddress={locationData?.address}
-                />
-              ) : (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                    Toplantı Linki
-                  </label>
-                  <div className="relative">
-                    <LinkIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="url"
-                      {...register('location')}
-                      placeholder="https://zoom.us/j/..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
-                    />
-                  </div>
-                </div>
-              )}
-            </SectionCard>
-
-            {/* 5. BİLET & KAPASİTE */}
-            <SectionCard>
-              <SectionTitle icon={Ticket} label="Bilet & Kapasite" color="text-sky-500" />
-              <div className="space-y-5">
-                <div>
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                    <Users size={12} className="text-slate-400" />
-                    Kontenjan <span className="text-red-400">*</span>
-                  </label>
-                  <input type="number" min="1" {...register('capacity')} placeholder="Örn: 150" className={inputCls} />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Fiyatlandırma</label>
-                  <div className="flex p-1 bg-slate-100 rounded-xl">
-                    {(['free', 'paid'] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setSelectedTicket(t)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${selectedTicket === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        {t === 'free' ? 'Ücretsiz' : 'Ücretli'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {selectedTicket === 'paid' && (
-                  <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                    <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                      Bilet Fiyatı <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold select-none">₺</span>
-                      <input type="number" min="0" step="0.01" placeholder="0.00" className={`${inputCls} pl-8 font-semibold`} {...register('price')} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-
-            {/* 6. BUTONLAR */}
-            <div className="flex flex-col gap-3">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 rounded-full text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:opacity-90 hover:shadow-lg hover:shadow-blue-200 active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}
-              >
-                {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-                {loading ? 'Yayınlanıyor...' : 'Etkinliği Yayınla'}
-              </button>
-              <button
-                type="button"
-                onClick={() => submitEvent(getValues(), 'draft')}
-                disabled={loading}
-                className="w-full py-3.5 rounded-full text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
-              >
-                Taslak Olarak Kaydet
-              </button>
+            {/* Format */}
+            <div className="flex p-0.5 bg-slate-100 rounded-xl w-fit mb-5">
+              {(['physical', 'online'] as const).map((f) => (
+                <button key={f} type="button" onClick={() => setSelectedFormat(f)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${selectedFormat === f ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  {f === 'physical' ? <><MapPin size={12} />Fiziksel</> : <><Globe size={12} />Online</>}
+                </button>
+              ))}
             </div>
 
+            {/* Tarih & Saat */}
+            <div className="bg-slate-50 rounded-2xl px-4 py-3 mb-5 border border-slate-100">
+              {[
+                { label: 'Başla', dateVal: startDate, timeVal: startTime, onDate: setStartDate, onTime: setStartTime, min: todayDate },
+                { label: 'Bitiş', dateVal: endDate,   timeVal: endTime,   onDate: setEndDate,   onTime: setEndTime,   min: startDate },
+              ].map(({ label, dateVal, timeVal, onDate, onTime, min }, i) => (
+                <div key={label} className={`flex items-center gap-3 py-2.5 ${i === 0 ? 'border-b border-slate-200' : ''}`}>
+                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0 ml-1" />
+                  <span className="text-sm text-slate-500 w-10 shrink-0">{label}</span>
+                  <div className="flex items-center gap-2 flex-1">
+                    <input type="date" value={dateVal} min={min} onChange={(e) => onDate(e.target.value)}
+                      className="text-sm font-semibold text-slate-800 bg-transparent focus:outline-none [color-scheme:light] cursor-pointer" />
+                    <input type="time" value={timeVal} onChange={(e) => onTime(e.target.value)}
+                      className="text-sm font-semibold text-slate-800 bg-transparent focus:outline-none [color-scheme:light] cursor-pointer w-20" />
+                  </div>
+                </div>
+              ))}
+              {dateError && (
+                <p className="text-xs text-red-500 flex items-center gap-1 mt-1.5 pb-1">
+                  <AlertCircle size={10} /> {dateError}
+                </p>
+              )}
+            </div>
+
+            {/* Konum */}
+            <button type="button" onClick={() => setLocationModalOpen(true)}
+              className="flex items-center gap-3 w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 mb-5 text-left hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
+              <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 group-hover:border-blue-200 transition-colors">
+                <MapPin size={14} className={locationData ? 'text-blue-500' : 'text-slate-400'} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${locationData ? 'text-slate-800' : 'text-slate-500'}`}>
+                  {locationData ? locationData.address.split(',')[0] : 'Etkinlik Konumu Ekle'}
+                </p>
+                {!locationData && <p className="text-[11px] text-slate-400 mt-0.5">Çevrimdışı konum veya sanal bağlantı</p>}
+              </div>
+              {locationData
+                ? <Check size={14} className="text-blue-500 shrink-0" strokeWidth={3} />
+                : <ChevronLeft size={14} className="text-slate-300 rotate-180 shrink-0" />
+              }
+            </button>
+
+            {/* Açıklama */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 mb-5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Etkinlik Açıklaması</p>
+              <AutoTextarea value={description} onChange={setDescription} placeholder="Etkinliğiniz hakkında bilgi verin..." />
+            </div>
+
+            {/* Etkinlik Seçenekleri */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-2 mb-6">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pt-2 mb-1">Etkinlik Seçenekleri</p>
+
+              {/* Bilet */}
+              <button type="button" onClick={() => setShowPriceEdit(!showPriceEdit)}
+                className="w-full flex items-center gap-3 py-3 border-b border-slate-200 hover:bg-white rounded-lg px-1 -mx-1 transition-colors group text-left">
+                <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                  <TicketIcon size={13} className="text-slate-500" />
+                </div>
+                <span className="flex-1 text-sm font-medium text-slate-700">Bilet Fiyatı</span>
+                <span className="text-sm font-semibold text-slate-400 flex items-center gap-1.5">
+                  {isPaid ? `₺${price || '0'}` : 'Ücretsiz'}
+                  <Pencil size={11} className="text-slate-300 group-hover:text-slate-400" />
+                </span>
+              </button>
+              <AnimatePresence>
+                {showPriceEdit && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.16 }} className="overflow-hidden">
+                    <div className="py-3 px-1 flex items-center gap-3 border-b border-slate-200">
+                      <div className="flex p-0.5 bg-slate-200 rounded-xl">
+                        {(['free', 'paid'] as const).map(t => (
+                          <button key={t} type="button" onClick={() => setIsPaid(t === 'paid')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${(!isPaid && t === 'free') || (isPaid && t === 'paid') ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>
+                            {t === 'free' ? 'Ücretsiz' : 'Ücretli'}
+                          </button>
+                        ))}
+                      </div>
+                      {isPaid && (
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold">₺</span>
+                          <input type="number" min="0" value={price} onChange={e => setPrice(e.target.value)}
+                            placeholder="0.00" className="bg-white border border-slate-200 rounded-xl pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 w-28" />
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Kontenjan */}
+              <button type="button" onClick={() => setShowCapEdit(!showCapEdit)}
+                className="w-full flex items-center gap-3 py-3 hover:bg-white rounded-lg px-1 -mx-1 transition-colors group text-left">
+                <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                  <Users size={13} className="text-slate-500" />
+                </div>
+                <span className="flex-1 text-sm font-medium text-slate-700">Kontenjan</span>
+                <span className="text-sm font-semibold text-slate-400 flex items-center gap-1.5">
+                  {capacity || 'Sınırsız'}
+                  <Pencil size={11} className="text-slate-300 group-hover:text-slate-400" />
+                </span>
+              </button>
+              <AnimatePresence>
+                {showCapEdit && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.16 }} className="overflow-hidden">
+                    <div className="py-3 px-1">
+                      <div className="flex items-center gap-2">
+                        <input type="number" min="1" value={capacity} onChange={e => setCapacity(e.target.value)}
+                          placeholder="Örn: 150"
+                          className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 w-32" />
+                        <span className="text-xs text-slate-400">kişi</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Kategori */}
+            <div className="mb-6">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">Kategori <span className="text-red-400">*</span></p>
+              <div className="flex gap-2 flex-wrap">
+                {CATEGORIES.map(({ value, label, icon: Icon }) => {
+                  const active = selectedCategory === value;
+                  return (
+                    <button key={value} type="button" onClick={() => setSelectedCategory(value)}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                      }`}>
+                      <Icon size={11} className={active ? 'text-white' : 'text-slate-400'} />
+                      {label}
+                      {active && <Check size={10} className="text-white" strokeWidth={3} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+              <button type="button" onClick={() => submit('draft')} disabled={loading}
+                className="px-5 py-3 rounded-full text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50">
+                Taslak
+              </button>
+              <button type="button" onClick={() => submit('published')} disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-full text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg hover:shadow-blue-200 active:scale-[0.98] disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
+                {loading ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
+                {loading ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Etkinlik Oluştur'}
+              </button>
+            </div>
           </div>
-        </form>
-      </main>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {locationModalOpen && (
+          <LocationModal onConfirm={(a, lat, lng) => setLocationData({ address: a, lat, lng })}
+            onClose={() => setLocationModalOpen(false)} initial={locationData} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

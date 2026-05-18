@@ -1,563 +1,634 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { useParams, useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import {
-  ArrowLeft, Calendar, Clock, MapPin, Globe, Users, Tag,
-  Ticket, CheckCircle2, XCircle, AlertCircle, Crown, Share2,
-  Heart, ExternalLink, Loader2, ChevronRight,
+  Calendar, Clock, MapPin, Globe, Users, Heart, Share2,
+  ChevronLeft, Loader2, Check, ExternalLink, Sparkles,
+  Music2, Cpu, Palette, Briefcase, PartyPopper, Dumbbell,
+  Gamepad2, Crown, BadgeCheck, Megaphone, ArrowRight,
+  UserPlus, UserCheck, AlertCircle,Flag
 } from 'lucide-react';
-import { useAuthModal } from '@/components/AuthModal';
+import TicketSuccessModal from '@/components/ui/TicketSuccessModal';
 
 
-const StaticMap = dynamic(() => import('@/components/ui/StaticMap'), {
-  ssr: false,
-  loading: () => <div className="w-full h-44 rounded-2xl bg-slate-100 animate-pulse" />,
-});
+const StaticMap = dynamic(() => import('@/components/ui/StaticMap'), { ssr: false });
 
-// ─── Sabitler ────────────────────────────────────────────────────────────────
-
-const CATEGORY_LABELS: Record<string, string> = {
-  music: 'Müzik & Konser', tech: 'Teknoloji', art: 'Sanat & Sergi',
-  business: 'İş & Networking', social: 'Sosyal Etkinlik', sport: 'Spor', game: 'Oyun',
+const CAT_META: Record<string, { label: string; icon: any; gradient: string; mesh: string }> = {
+  music:    { label: 'Müzik',     icon: Music2,      gradient: 'from-pink-500 to-rose-600',    mesh: 'radial-gradient(ellipse at 20% 50%,#f43f5e33 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#ec489933 0%,transparent 60%),linear-gradient(135deg,#1e1b4b,#312e81)' },
+  tech:     { label: 'Teknoloji', icon: Cpu,         gradient: 'from-blue-500 to-cyan-600',    mesh: 'radial-gradient(ellipse at 20% 50%,#3b82f633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#06b6d433 0%,transparent 60%),linear-gradient(135deg,#0f172a,#1e3a5f)' },
+  art:      { label: 'Sanat',     icon: Palette,     gradient: 'from-violet-500 to-purple-600',mesh: 'radial-gradient(ellipse at 20% 50%,#8b5cf633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#a855f733 0%,transparent 60%),linear-gradient(135deg,#1a0533,#2d1b69)' },
+  business: { label: 'İş',        icon: Briefcase,   gradient: 'from-amber-500 to-orange-500', mesh: 'radial-gradient(ellipse at 20% 50%,#f59e0b33 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#ea580c33 0%,transparent 60%),linear-gradient(135deg,#1c1107,#431407)' },
+  social:   { label: 'Sosyal',    icon: PartyPopper, gradient: 'from-emerald-500 to-teal-600', mesh: 'radial-gradient(ellipse at 20% 50%,#10b98133 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#0d948133 0%,transparent 60%),linear-gradient(135deg,#022c22,#134e4a)' },
+  sport:    { label: 'Spor',      icon: Dumbbell,    gradient: 'from-orange-500 to-red-600',   mesh: 'radial-gradient(ellipse at 20% 50%,#f9731633 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#dc262633 0%,transparent 60%),linear-gradient(135deg,#1c0a00,#450a0a)' },
+  game:     { label: 'Oyun',      icon: Gamepad2,    gradient: 'from-indigo-500 to-blue-600',  mesh: 'radial-gradient(ellipse at 20% 50%,#6366f133 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,#1d4ed833 0%,transparent 60%),linear-gradient(135deg,#0f0c29,#1e1b4b)' },
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  music: 'bg-pink-100 text-pink-700', tech: 'bg-blue-100 text-blue-700',
-  art: 'bg-violet-100 text-violet-700', business: 'bg-amber-100 text-amber-700',
-  social: 'bg-emerald-100 text-emerald-700', sport: 'bg-orange-100 text-orange-700',
-  game: 'bg-indigo-100 text-indigo-700',
-};
+const AVATAR_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#10b981','#f59e0b','#ef4444','#06b6d4'];
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-200 rounded-xl ${className}`} />;
+interface EventDetail {
+  id: string; title: string; category: string; location: string;
+  is_online: boolean; is_paid: boolean; price: number;
+  start_at: string; end_at: string; long_description: string | null;
+  cover_image_url: string | null; total_capacity: number;
+  organizer_id: string; community_id: string | null;
+  latitude: number | null; longitude: number | null;
+  tags: string[];
 }
 
-function EventDetailSkeleton() {
+interface Attendee {
+  user_id: string;
+  profiles: { display_name: string | null; first_name: string | null; avatar_url: string | null; };
+}
+
+interface Community {
+  id: string; name: string; bio: string | null; avatar_url: string | null;
+  cover_url: string | null; category: string | null; city: string | null;
+  is_verified: boolean; member_count: number;
+}
+
+interface CommunityPost {
+  id: string; content: string; post_type: string; created_at: string;
+  profiles: { display_name: string | null; first_name: string | null; };
+}
+
+function AvatarGroup({ attendees, total }: { attendees: Attendee[]; total: number }) {
+  const show = attendees.slice(0, 5);
+  const extra = Math.max(0, total - show.length);
+  if (total === 0) return null;
   return (
-    <div className="flex flex-col w-full min-h-screen bg-[#f5f7f9]">
-      <div className="w-full h-[340px] md:h-[480px] bg-slate-200 animate-pulse" />
-      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 flex flex-col gap-6">
-          <div className="bg-white rounded-3xl p-6 flex gap-6">
-            {[1,2,3].map(i => (
-              <div key={i} className="flex-1 flex flex-col gap-2">
-                <Skeleton className="h-10 w-10 rounded-2xl" />
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-4 w-24" />
-              </div>
-            ))}
+    <div className="flex items-center gap-2.5">
+      <div className="flex -space-x-2">
+        {show.map((a, i) => {
+          const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+          const initial = (a.profiles?.display_name || a.profiles?.first_name || '?').charAt(0).toUpperCase();
+          return a.profiles?.avatar_url ? (
+            <img key={a.user_id} src={a.profiles.avatar_url} alt=""
+              className="w-8 h-8 rounded-full border-2 border-white object-cover shadow-sm"
+              style={{ zIndex: show.length - i }} />
+          ) : (
+            <div key={a.user_id} className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-xs font-bold text-white shadow-sm"
+              style={{ background: color, zIndex: show.length - i }}>
+              {initial}
+            </div>
+          );
+        })}
+        {extra > 0 && (
+          <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 shadow-sm"
+            style={{ zIndex: 0 }}>
+            +{extra}
           </div>
-          <div className="bg-white rounded-3xl p-6 flex flex-col gap-3">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-4/6" />
-          </div>
-        </div>
-        <div className="lg:col-span-4 flex flex-col gap-4">
-          <div className="bg-white rounded-3xl p-6 flex flex-col gap-4">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-12 w-full rounded-full" />
-          </div>
-        </div>
+        )}
       </div>
+      <span className="text-sm text-slate-600 font-medium">{total.toLocaleString('tr-TR')} kişi katılıyor</span>
     </div>
   );
 }
-
-// ─── Yardımcı Bileşenler ──────────────────────────────────────────────────────
-
-function InfoChip({ icon: Icon, label, value, color = 'bg-blue-50', iconColor = 'text-blue-600' }: {
-  icon: any; label: string; value: string; color?: string; iconColor?: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 flex-1 min-w-0">
-      <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center shrink-0`}>
-        <Icon size={17} className={iconColor} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-semibold text-slate-800 truncate">{value}</p>
-      </div>
-    </div>
-  );
-}
-
-function CapacityBar({ percent }: { percent: number }) {
-  const color = percent >= 100 ? 'from-red-500 to-red-600' : percent >= 80 ? 'from-orange-400 to-red-500' : 'from-blue-500 to-blue-600';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex justify-between items-center text-xs font-semibold">
-        <span className="text-slate-500">Doluluk</span>
-        <span className={percent >= 80 ? 'text-red-600' : 'text-slate-600'}>{Math.min(percent, 100)}%</span>
-      </div>
-      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full bg-gradient-to-r ${color} transition-all duration-700`}
-          style={{ width: `${Math.min(percent, 100)}%` }}
-        />
-      </div>
-      {percent >= 80 && percent < 100 && (
-        <p className="text-[11px] text-orange-600 font-semibold flex items-center gap-1">
-          <AlertCircle size={11} /> Son birkaç yer kaldı!
-        </p>
-      )}
-      {percent >= 100 && (
-        <p className="text-[11px] text-red-600 font-semibold flex items-center gap-1">
-          <XCircle size={11} /> Kapasite doldu
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ─── Ana Bileşen ──────────────────────────────────────────────────────────────
 
 export default function EventDetailPage() {
-  const { open } = useAuthModal();
-
-  const { id: eventId } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [event, setEvent] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [attendLoading, setAttendLoading] = useState(false);
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [attendeeCount, setAttendeeCount] = useState(0);
+  const [community, setCommunity] = useState<Community | null>(null);
+  const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
   const [isAttending, setIsAttending] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isCommunityMember, setIsCommunityMember] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [shared, setShared] = useState(false);
+  const [ticketModal, setTicketModal] = useState(false);
 
-  // Veri çekme
+
   useEffect(() => {
-    if (!eventId) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
 
-    const fetchAll = async () => {
-      try {
-        const [
-          { data: eventData, error: eventErr },
-          { data: { user } },
-        ] = await Promise.all([
-          supabase
-            .from('events')
-            .select(`
-              *,
-              organizer:profiles!organizer_id (
-                id, first_name, last_name, avatar_url, bio, is_pro, role
-              ),
-              event_attendees(count)
-            `)
-            .eq('id', eventId)
-            .single(),
-          supabase.auth.getUser(),
-        ]);
+      const { data: ev, error } = await supabase
+        .from('events').select('*').eq('id', id).single();
+      if (error || !ev) { router.push('/dashboard'); return; }
+      setEvent(ev);
 
-        if (eventErr) throw eventErr;
-        if (!eventData) throw new Error('Etkinlik bulunamadı.');
+      const [attendeesRes, favRes, communityRes] = await Promise.all([
+        supabase.from('event_attendees')
+          .select('user_id, profiles(display_name, first_name, avatar_url)')
+          .eq('event_id', id).limit(10),
+        user
+          ? supabase.from('event_favorites').select('id').eq('event_id', id).eq('user_id', user.id).single()
+          : Promise.resolve({ data: null }),
+        ev.community_id
+          ? supabase.from('communities').select('*').eq('id', ev.community_id).single()
+          : Promise.resolve({ data: null }),
+      ]);
 
-        const attendeesCount = eventData.event_attendees?.[0]?.count ?? 0;
-        const capacityPercent = eventData.total_capacity > 0
-          ? Math.round((attendeesCount / eventData.total_capacity) * 100)
-          : 0;
+      const mapped = (attendeesRes.data || []).map((a: any) => ({
+        user_id: a.user_id,
+        profiles: Array.isArray(a.profiles) ? a.profiles[0] : a.profiles,
+      }));
+      setAttendees(mapped);
 
-        setEvent({ ...eventData, attendeesCount, capacityPercent });
+      // Total count
+      const { count } = await supabase.from('event_attendees')
+        .select('*', { count: 'exact', head: true }).eq('event_id', id);
+      setAttendeeCount(count || 0);
+
+      if (user) {
+        const { data: attending } = await supabase.from('event_attendees')
+          .select('id').eq('event_id', id).eq('user_id', user.id).single();
+        setIsAttending(!!attending);
+      }
+      setIsFavorited(!!favRes.data);
+
+      if (communityRes.data) {
+        setCommunity(communityRes.data);
+
+        // Topluluk son 2 duyurusu
+        const { data: posts } = await supabase
+          .from('community_posts')
+          .select('id, content, post_type, created_at, profiles(display_name, first_name)')
+          .eq('community_id', ev.community_id)
+          .eq('post_type', 'announcement')
+          .order('created_at', { ascending: false })
+          .limit(2);
+        setCommunityPosts((posts || []).map((p: any) => ({
+          ...p, profiles: Array.isArray(p.profiles) ? p.profiles[0] : p.profiles,
+        })));
 
         if (user) {
-          setCurrentUserId(user.id);
-          const [{ data: attending }, { data: fav }] = await Promise.all([
-            supabase
-              .from('event_attendees')
-              .select('id')
-              .eq('event_id', eventId)
-              .eq('user_id', user.id)
-              .maybeSingle(),
-            supabase
-              .from('event_favorites')
-              .select('id')
-              .eq('event_id', eventId)
-              .eq('user_id', user.id)
-              .maybeSingle(),
-          ]);
-          setIsAttending(!!attending);
-          setIsFavorited(!!fav);
+          const { data: mem } = await supabase.from('community_members')
+            .select('id').eq('community_id', ev.community_id).eq('user_id', user.id).single();
+          setIsCommunityMember(!!mem);
         }
-      } catch (err: any) {
-        toast.error(err.message || 'Etkinlik yüklenirken hata oluştu.');
-      } finally {
-        setLoading(false);
       }
-    };
 
-    fetchAll();
-  }, [eventId]);
+      setLoading(false);
+    })();
+  }, [id]);
 
-  // Katılım işlemi
   const handleAttend = async () => {
-    if (!currentUserId) {
-      open(); 
-      return;
+    if (!currentUser) { toast.error('Katılmak için giriş yapmalısınız.'); return; }
+    if (!event) return;
+    
+    // YENİ MANTIK: Eğer zaten katılıyorsa, iptal etmek yerine bileti göster!
+    if (isAttending) {
+      setTicketModal(true);
+      return; 
     }
-    if (event?.capacityPercent >= 100) return;
 
-    setAttendLoading(true);
+    setActionLoading(true);
     try {
-      if (isAttending) {
-        const { error } = await supabase
-          .from('event_attendees')
-          .delete()
-          .eq('event_id', eventId)
-          .eq('user_id', currentUserId);
-        if (error) throw error;
-        setIsAttending(false);
-        setEvent((prev: any) => ({
-          ...prev,
-          attendeesCount: prev.attendeesCount - 1,
-          capacityPercent: Math.round(((prev.attendeesCount - 1) / prev.total_capacity) * 100),
-        }));
-        toast.success('Kayıt iptal edildi.');
-      } else {
-        const { error } = await supabase
-          .from('event_attendees')
-          .insert([{ event_id: eventId, user_id: currentUserId, status: 'registered' }]);
-        if (error) {
-          if (error.code === '23505') { toast.error('Bu etkinliğe zaten kayıtlısınız.'); return; }
-          throw error;
-        }
-        setIsAttending(true);
-        setEvent((prev: any) => ({
-          ...prev,
-          attendeesCount: prev.attendeesCount + 1,
-          capacityPercent: Math.round(((prev.attendeesCount + 1) / prev.total_capacity) * 100),
-        }));
-        toast.success('Etkinliğe başarıyla kaydoldunuz! 🎉');
+      if (event.total_capacity > 0 && attendeeCount >= event.total_capacity) {
+        toast.error('Kontenjan doldu.'); return;
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Bir hata oluştu.');
-    } finally {
-      setAttendLoading(false);
-    }
+      await supabase.from('event_attendees').insert([{ event_id: id, user_id: currentUser.id }]);
+      setIsAttending(true);
+      setAttendeeCount(c => c + 1);
+      
+      // YENİ: Kayıt başarılı olunca hem toast mesajı ver hem de bilet modalını aç
+      toast.success('Etkinliğe katıldınız! 🎉');
+      setTicketModal(true); 
+      
+    } catch { toast.error('Bir hata oluştu.'); }
+    finally { setActionLoading(false); }
   };
 
-  // Favori işlemi
   const handleFavorite = async () => {
-    if (!currentUserId) { toast.error('Favorilere eklemek için giriş yapmalısınız.'); return; }
+    if (!currentUser) { toast.error('Giriş yapmalısınız.'); return; }
     try {
       if (isFavorited) {
-        await supabase.from('event_favorites').delete().eq('event_id', eventId).eq('user_id', currentUserId);
+        await supabase.from('event_favorites').delete()
+          .eq('event_id', id).eq('user_id', currentUser.id);
         setIsFavorited(false);
-        toast.success('Favorilerden çıkarıldı.');
       } else {
-        await supabase.from('event_favorites').insert([{ event_id: eventId, user_id: currentUserId }]);
+        await supabase.from('event_favorites').insert([{ event_id: id, user_id: currentUser.id }]);
         setIsFavorited(true);
-        toast.success('Favorilere eklendi!');
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Bir hata oluştu.');
-    }
+    } catch { toast.error('Bir hata oluştu.'); }
   };
 
-  const handleShare = async () => {
+  const handleJoinCommunity = async () => {
+    if (!currentUser || !community) return;
     try {
-      await navigator.share({ title: event?.title, url: window.location.href });
-    } catch {
-      await navigator.clipboard.writeText(window.location.href);
+      if (isCommunityMember) {
+        await supabase.from('community_members').delete()
+          .eq('community_id', community.id).eq('user_id', currentUser.id);
+        setIsCommunityMember(false);
+        setCommunity(c => c ? { ...c, member_count: c.member_count - 1 } : c);
+      } else {
+        await supabase.from('community_members')
+          .insert([{ community_id: community.id, user_id: currentUser.id, role: 'member' }]);
+        setIsCommunityMember(true);
+        setCommunity(c => c ? { ...c, member_count: c.member_count + 1 } : c);
+        toast.success('Topluluğa katıldınız!');
+      }
+    } catch { toast.error('Bir hata oluştu.'); }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: event?.title, url: window.location.href });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      setShared(true);
       toast.success('Link kopyalandı!');
+      setTimeout(() => setShared(false), 2000);
     }
   };
 
-  if (loading) return <EventDetailSkeleton />;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 size={24} className="animate-spin text-slate-400" />
+    </div>
+  );
 
-  if (!event) {
-    return (
-      <div className="min-h-screen bg-[#f5f7f9] flex flex-col items-center justify-center gap-4 px-4 text-center">
-        <XCircle size={48} className="text-red-400" />
-        <h2 className="text-2xl font-bold text-slate-800">Etkinlik bulunamadı</h2>
-        <Link href="/dashboard" className="px-6 py-2.5 bg-blue-600 text-white rounded-full font-semibold text-sm hover:bg-blue-700 transition-colors">
-          Keşfete Dön
-        </Link>
-      </div>
-    );
-  }
+  if (!event) return null;
 
+  const meta = CAT_META[event.category];
   const startDate = new Date(event.start_at);
-  const endDate = new Date(event.end_at);
-  const fmtDate = startDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
-  const fmtStartTime = startDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const fmtEndTime = endDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const organizerName = [event.organizer?.first_name, event.organizer?.last_name].filter(Boolean).join(' ') || 'Organizatör';
-  const isFull = event.capacityPercent >= 100;
-  const isOrganizer = currentUserId === event.organizer_id;
+  const endDate   = new Date(event.end_at);
+  const isPast    = endDate < new Date();
+  const capacityPct = event.total_capacity > 0
+    ? Math.min(Math.round((attendeeCount / event.total_capacity) * 100), 100) : 0;
+  const spotsLeft = event.total_capacity > 0 ? event.total_capacity - attendeeCount : null;
+  const isFull    = spotsLeft !== null && spotsLeft <= 0;
 
-  const AttendButton = () => (
-    <button
-      onClick={handleAttend}
-      disabled={attendLoading || isFull}
-      className={`w-full py-4 rounded-full font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed
-        ${isAttending
-          ? 'bg-slate-100 text-slate-700 hover:bg-red-50 hover:text-red-600 border border-slate-200'
-          : isFull
-            ? 'bg-slate-100 text-slate-500'
-            : 'text-white hover:opacity-90 hover:shadow-lg hover:shadow-blue-200'
+  const fmtDate = startDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+  const fmtStart = startDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const fmtEnd   = endDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const googleMapsUrl = event.latitude && event.longitude
+    ? `https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`;
+
+  const communityMeta = community?.category ? CAT_META[community.category] : null;
+  const commInitials = community?.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '';
+
+  // CTA Button content
+  const ctaLabel = isPast ? 'Etkinlik Sona Erdi'
+    : isFull ? 'Kontenjan Doldu'
+    : isAttending ? 'Bileti Görüntüle' // BURAYI DEĞİŞTİRDİK
+    : event.is_paid ? `Bilet Al — ₺${event.price}`
+    : 'Ücretsiz Katıl';
+
+  const ctaDisabled = isPast || (isFull && !isAttending) || actionLoading;
+
+  // CTA Component (reused in sticky + mobile)
+  const CTABox = ({ mobile = false }: { mobile?: boolean }) => (
+    <div className={`bg-white ${mobile ? 'rounded-none px-4 py-4 pb-safe' : 'rounded-[28px] shadow-2xl p-6'} flex flex-col gap-5`}>
+      {/* Fiyat */}
+      <div className="flex items-end justify-between">
+        <div>
+          {event.is_paid ? (
+            <>
+              <p className="text-3xl font-black text-slate-900">₺{event.price}</p>
+              <p className="text-xs text-slate-400 mt-0.5">kişi başı</p>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-black text-emerald-600">Ücretsiz</p>
+              <p className="text-xs text-slate-400 mt-0.5">katılım</p>
+            </>
+          )}
+        </div>
+        {spotsLeft !== null && spotsLeft <= 10 && spotsLeft > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-100 rounded-full">
+            <AlertCircle size={12} className="text-red-500" />
+            <span className="text-xs font-bold text-red-600">Son {spotsLeft} yer!</span>
+          </div>
+        )}
+        {isFull && (
+          <span className="px-3 py-1.5 bg-slate-100 rounded-full text-xs font-bold text-slate-500">Dolu</span>
+        )}
+      </div>
+
+      {/* Kapasite barı */}
+      {event.total_capacity > 0 && (
+        <div>
+          <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+            <span>{attendeeCount} kayıtlı</span>
+            <span>{event.total_capacity} kapasite</span>
+          </div>
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }} animate={{ width: `${capacityPct}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
+              className={`h-full rounded-full ${capacityPct >= 90 ? 'bg-red-400' : capacityPct >= 70 ? 'bg-amber-400' : 'bg-blue-500'}`} />
+          </div>
+        </div>
+      )}
+
+      {/* Avatar group */}
+      {attendeeCount > 0 && (
+        <AvatarGroup attendees={attendees} total={attendeeCount} />
+      )}
+
+      {/* CTA Buton */}
+      <button onClick={handleAttend} disabled={ctaDisabled}
+        className={`w-full py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+          isPast || isFull
+            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            : isAttending
+              ? 'bg-slate-100 text-slate-700 hover:bg-red-50 hover:text-red-600 border border-slate-200'
+              : 'text-white hover:opacity-90 hover:shadow-lg hover:shadow-blue-200'
         }`}
-      style={!isAttending && !isFull ? { background: 'linear-gradient(135deg, #3b82f6, #2563eb)' } : {}}
-    >
-      {attendLoading
-        ? <Loader2 size={16} className="animate-spin" />
-        : isAttending
-          ? <><CheckCircle2 size={16} /> Kaydım Var — İptal Et</>
-          : isFull
-            ? <><XCircle size={16} /> Yer Kalmadı</>
-            : event.is_paid
-              ? <><Ticket size={16} /> Bilet Al — ₺{event.price}</>
-              : <><CheckCircle2 size={16} /> Ücretsiz Katıl</>
-      }
-    </button>
+        style={!isPast && !isFull && !isAttending ? { background: 'linear-gradient(135deg,#3b82f6,#2563eb)' } : {}}>
+        {actionLoading ? <Loader2 size={16} className="animate-spin" /> : isAttending ? <Check size={16} /> : null}
+        {ctaLabel}
+      </button>
+
+      {/* Favori + Paylaş */}
+      <div className="flex gap-2">
+        <button onClick={handleFavorite}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border transition-all ${
+            isFavorited ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+          }`}>
+          <Heart size={14} className={isFavorited ? 'fill-current' : ''} />
+          {isFavorited ? 'Favorilendi' : 'Favori'}
+        </button>
+        <button onClick={handleShare}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-all">
+          {shared ? <Check size={14} className="text-emerald-500" /> : <Share2 size={14} />}
+          {shared ? 'Kopyalandı' : 'Paylaş'}
+        </button>
+      </div>
+    </div>
   );
 
   return (
-    <div className="flex flex-col w-full min-h-screen bg-[#f5f7f9] pb-24 md:pb-0">
+    <div className="flex flex-col min-h-screen bg-[#f5f7f9] pb-24 md:pb-0">
 
-      {/* Hero */}
-      <div className="relative w-full h-[340px] md:h-[480px] bg-slate-900 overflow-hidden">
-        <Image
-          src={event.cover_image_url || 'https://images.unsplash.com/photo-1540039155732-d68a919385d8?q=80&w=2000&auto=format&fit=crop'}
-          alt={event.title}
-          fill
-          className="object-cover opacity-80"
-          priority
-          unoptimized
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent" />
+      {/* Geri */}
+      <div className="max-w-6xl mx-auto w-full px-4 md:px-6 pt-4 md:pt-6 mb-4">
+        <button onClick={() => router.back()}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors group">
+          <ChevronLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" /> Geri
+        </button>
+      </div>
 
-        {/* Back + Actions */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 md:p-6 z-10">
-          <button
-            onClick={() => router.back()}
-            className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/50 transition-colors"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleFavorite}
-              className={`w-10 h-10 rounded-full backdrop-blur-md flex items-center justify-center transition-all ${isFavorited ? 'bg-red-500 text-white' : 'bg-black/30 text-white hover:bg-black/50'}`}
-            >
-              <Heart size={17} className={isFavorited ? 'fill-current' : ''} />
-            </button>
-            <button
-              onClick={handleShare}
-              className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/50 transition-colors"
-            >
-              <Share2 size={17} />
-            </button>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto w-full px-4 md:px-6 pb-8">
 
-        {/* Hero Content */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 z-10">
-          <div className="flex flex-wrap gap-2 mb-3">
-            <span className={`text-xs font-bold px-3 py-1 rounded-full ${CATEGORY_COLORS[event.category] || 'bg-blue-100 text-blue-700'}`}>
-              {CATEGORY_LABELS[event.category] || event.category}
-            </span>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full ${event.is_paid ? 'bg-white/20 text-white backdrop-blur-sm' : 'bg-emerald-100 text-emerald-700'}`}>
-              {event.is_paid ? `₺${event.price}` : 'Ücretsiz'}
-            </span>
-            {event.is_online && (
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-blue-700 flex items-center gap-1">
-                <Globe size={11} /> Online
+        {/* Hero */}
+        <div className="relative w-full h-72 md:h-[420px] rounded-[28px] overflow-hidden mb-8 shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
+          {event.cover_image_url ? (
+            <Image src={event.cover_image_url} alt={event.title} fill className="object-cover" unoptimized priority />
+          ) : (
+            <div className="absolute inset-0" style={{ background: meta?.mesh || 'linear-gradient(135deg,#1e293b,#334155)' }}>
+              {meta && <meta.icon size={180} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/[0.04]" />}
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+          {/* Rozetler */}
+          <div className="absolute top-5 left-5 flex items-center gap-2 flex-wrap">
+            {meta && (
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white bg-gradient-to-r ${meta.gradient} shadow-md`}>
+                <meta.icon size={12} /> {meta.label}
               </span>
             )}
+            {isPast && <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-black/40 text-white/80 backdrop-blur-sm">Sona Erdi</span>}
           </div>
-          <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight leading-tight">
-            {event.title}
-          </h1>
-          <div className="flex items-center gap-2 mt-3 text-white/70 text-sm">
-            <div className="flex items-center gap-1">
-              <span className="text-xs">📍</span>
-              <span className="text-xs font-medium truncate max-w-xs">{event.location}</span>
-            </div>
-            <span>·</span>
-            <div className="flex items-center gap-1">
-              <Users size={12} />
-              <span className="text-xs font-medium">{event.attendeesCount} katılımcı</span>
-            </div>
+          <div className="absolute top-5 right-5">
+            <span className={`px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm shadow-md ${event.is_paid ? 'bg-black/40 text-white' : 'bg-emerald-500/80 text-white'}`}>
+              {event.is_paid ? `₺${event.price}` : 'Ücretsiz'}
+            </span>
+          </div>
+
+          {/* Başlık */}
+          <div className="absolute bottom-6 left-6 right-6">
+            <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight drop-shadow-md">
+              {event.title}
+            </h1>
+            {event.tags && event.tags.length > 0 && (
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {event.tags.slice(0, 4).map(tag => (
+                  <span key={tag} className="px-2.5 py-1 bg-white/15 backdrop-blur-sm rounded-full text-xs font-medium text-white">#{tag}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Grid */}
-      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* İki Kolon */}
+        <div className="flex flex-col lg:flex-row gap-8">
 
-        {/* SOL: İçerik */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
+          {/* SOL — Detaylar */}
+          <div className="flex-1 min-w-0 flex flex-col gap-6">
 
-          {/* Quick Info */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-5">
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-              <InfoChip icon={Calendar} label="Tarih" value={fmtDate} color="bg-blue-50" iconColor="text-blue-600" />
-              <div className="w-px bg-slate-100 hidden sm:block" />
-              <InfoChip icon={Clock} label="Saat" value={`${fmtStartTime} – ${fmtEndTime}`} color="bg-violet-50" iconColor="text-violet-600" />
-              <div className="w-px bg-slate-100 hidden sm:block" />
-              <InfoChip
-                icon={event.is_online ? Globe : MapPin}
-                label={event.is_online ? 'Format' : 'Konum'}
-                value={event.is_online ? 'Online Etkinlik' : event.location}
-                color="bg-rose-50"
-                iconColor="text-rose-600"
-              />
-            </div>
-          </div>
-
-          {/* Açıklama */}
-          {event.long_description && (
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-6 md:p-8">
-              <h2 className="text-base font-bold text-slate-800 mb-4 uppercase tracking-widest text-xs text-slate-500">
-                Etkinlik Hakkında
-              </h2>
-              <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                {event.long_description}
-              </div>
-            </div>
-          )}
-
-          {/* Etiketler */}
-          {event.tags?.length > 0 && (
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-5 flex items-center gap-3 flex-wrap">
-              <Tag size={14} className="text-slate-400 shrink-0" />
-              {event.tags.map((tag: string) => (
-                <span key={tag} className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-default">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Harita */}
-          {event.latitude && event.longitude && !event.is_online && (
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-6">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Konum</h2>
-              <StaticMap lat={event.latitude} lng={event.longitude} label={event.location} />
-              <p className="text-sm text-slate-600 mt-3 flex items-center gap-1.5">
-                <MapPin size={13} className="text-slate-400 shrink-0" />
-                {event.location}
-              </p>
-            </div>
-          )}
-
-          {/* Online link */}
-          {event.is_online && event.location?.startsWith('http') && isAttending && (
-            <div className="bg-blue-50 border border-blue-100 rounded-3xl p-5 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Katılım Linki</p>
-                <p className="text-sm text-blue-600 font-medium truncate max-w-xs">{event.location}</p>
-              </div>
-              <a href={event.location} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-full text-xs font-bold hover:bg-blue-700 transition-colors">
-                Katıl <ExternalLink size={12} />
-              </a>
-            </div>
-          )}
-
-          {/* Organizatör Kartı */}
-          {event.organizer && (
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-6">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Organizatör</h2>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xl font-black shrink-0 overflow-hidden">
-                  {event.organizer.avatar_url
-                    ? <Image src={event.organizer.avatar_url} alt={organizerName} width={56} height={56} className="object-cover" unoptimized />
-                    : organizerName.charAt(0).toUpperCase()
-                  }
+            {/* Tarih, Saat, Konum */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-6">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex flex-col items-center justify-center shrink-0 border border-blue-100">
+                    <span className="text-[11px] font-black text-blue-700 uppercase leading-none">
+                      {startDate.toLocaleDateString('tr-TR', { month: 'short' })}
+                    </span>
+                    <span className="text-xl font-black text-blue-700 leading-none">{startDate.getDate()}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{fmtDate}</p>
+                    <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">
+                      <Clock size={13} className="text-slate-400" />
+                      {fmtStart} – {fmtEnd}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-slate-800 text-sm">{organizerName}</p>
-                    {event.organizer.is_pro && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[10px] font-bold border border-amber-200">
-                        <Crown size={10} /> PRO
-                      </span>
+
+                <div className="h-px bg-slate-100" />
+
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center shrink-0 border border-rose-100">
+                    {event.is_online
+                      ? <Globe size={20} className="text-rose-500" />
+                      : <MapPin size={20} className="text-rose-500" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900">{event.is_online ? 'Online Etkinlik' : 'Fiziksel Konum'}</p>
+                    <p className="text-sm text-slate-500 mt-0.5 truncate">{event.location}</p>
+                    {!event.is_online && (
+                      <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 mt-1.5 transition-colors">
+                        Yol Tarifi Al <ExternalLink size={11} />
+                      </a>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 capitalize">{event.organizer.role || 'Organizatör'}</p>
-                  {event.organizer.bio && (
-                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">{event.organizer.bio}</p>
-                  )}
+                </div>
+
+                {event.total_capacity > 0 && (
+                  <>
+                    <div className="h-px bg-slate-100" />
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center shrink-0 border border-emerald-100">
+                        <Users size={20} className="text-emerald-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{event.total_capacity} Kişilik Etkinlik</p>
+                        <p className="text-sm text-slate-500 mt-0.5">{attendeeCount} kayıt · {event.total_capacity - attendeeCount} yer kaldı</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Açıklama */}
+            {event.long_description && (
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-6">
+                <h2 className="text-base font-bold text-slate-900 mb-4">Etkinlik Hakkında</h2>
+                <div className="prose prose-sm prose-slate max-w-none text-slate-600 leading-relaxed">
+                  {event.long_description.split('\n').map((p, i) => (
+                    p.trim() ? <p key={i} className="mb-3 last:mb-0">{p}</p> : null
+                  ))}
                 </div>
               </div>
+            )}
+
+            {/* Harita */}
+            {!event.is_online && event.latitude && event.longitude && (
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+                <div className="h-52">
+                  <StaticMap lat={event.latitude} lng={event.longitude} title={event.title} />
+                </div>
+                <div className="px-6 py-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 truncate max-w-xs">{event.location}</p>
+                  </div>
+                  <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-100">
+                    <MapPin size={14} /> Yol Tarifi
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Topluluk Kartı */}
+{/* Topluluk Kartı */}
+{community && (
+  <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden">
+    
+    {/* Cover + Avatar birlikte */}
+    <div className="relative h-24 bg-slate-100 mb-10">
+      {community.cover_url
+        ? <Image src={community.cover_url} alt={community.name} fill className="object-cover" unoptimized />
+        : <div className="absolute inset-0" style={{ background: communityMeta?.mesh || 'linear-gradient(135deg,#1e293b,#334155)' }} />
+      }
+      {/* Avatar cover'ın içinde absolute, alt kenardan taşıyor */}
+      <div className="absolute -bottom-7 left-6 w-14 h-14 rounded-2xl ring-4 ring-white shadow-md overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center z-10">
+        {community.avatar_url
+          ? <img src={community.avatar_url} alt={community.name} className="w-full h-full object-cover" />
+          : <span className="text-white font-black text-lg">{commInitials}</span>
+        }
+      </div>
+    </div>
+
+    <div className="px-6 pb-6">
+      {/* Katıl butonu — sağa hizalı */}
+      <div className="flex justify-end mb-3">
+        <button onClick={handleJoinCommunity}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${
+            isCommunityMember
+              ? 'bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 border border-slate-200'
+              : 'text-white hover:opacity-90'
+          }`}
+          style={isCommunityMember ? {} : { background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
+          {isCommunityMember ? <><UserCheck size={14} />Üyesin</> : <><UserPlus size={14} />Katıl</>}
+        </button>
+      </div>
+
+      {/* İsim + rozetler */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <p className="text-base font-black text-slate-900">{community.name}</p>
+        {community.is_verified && <BadgeCheck size={16} className="text-blue-500" />}
+      </div>
+
+      <div className="flex items-center gap-3 text-xs text-slate-500 mb-3 flex-wrap">
+        <span className="flex items-center gap-1"><Users size={11} className="text-slate-400" />{community.member_count.toLocaleString('tr-TR')} üye</span>
+        {community.city && <span className="flex items-center gap-1"><MapPin size={11} className="text-slate-400" />{community.city}</span>}
+        {communityMeta && (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${communityMeta.gradient}`}>
+            <communityMeta.icon size={9} /> {communityMeta.label}
+          </span>
+        )}
+      </div>
+
+      {community.bio && (
+        <p className="text-sm text-slate-500 leading-relaxed line-clamp-2 mb-4">{community.bio}</p>
+      )}
+
+      {/* Topluluğu ziyaret et */}
+      <Link href={`/community/${community.id}`}
+        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors mb-4">
+        <Users size={14} /> Topluluğu Ziyaret Et <ArrowRight size={13} />
+      </Link>
+
+      {/* Son duyurular */}
+      {communityPosts.length > 0 && (
+        <div className="border-t border-slate-100 pt-4 flex flex-col gap-3">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <Megaphone size={11} /> Son Duyurular
+          </p>
+          {communityPosts.map(post => (
+            <div key={post.id} className="flex items-start gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{post.content}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {new Date(post.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                </p>
+              </div>
             </div>
-          )}
+          ))}
         </div>
+      )}
+    </div>
+  </div>
+)}/ {/* Şikayet Et */}
+            <div className="flex justify-center pt-2 pb-4">
+              <Link
+                href={`/report?type=event&id=${event.id}`}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors group"
+              >
+                <Flag
+                  size={11}
+                  className="group-hover:text-rose-400 transition-colors"
+                />
+                Bu etkinliği şikayet et
+              </Link>
+            </div>
+            </div>
 
-        {/* SAĞ: Bilet Kartı — masaüstü sticky */}
-        <div className="lg:col-span-4 hidden md:flex flex-col gap-5 sticky top-8 h-fit">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] overflow-hidden">
-            <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
-            <div className="p-6 flex flex-col gap-5">
-              <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
-                  {event.is_paid ? 'Bilet Fiyatı' : 'Giriş'}
-                </p>
-                <p className="text-3xl font-black text-slate-900">
-                  {event.is_paid ? `₺${event.price}` : 'Ücretsiz'}
-                </p>
-                {event.is_paid && <p className="text-xs text-slate-400 mt-0.5">kişi başı</p>}
-              </div>
-
-              <div className="flex items-center gap-3 text-sm text-slate-600 bg-slate-50 rounded-2xl p-3">
-                <Users size={15} className="text-slate-400 shrink-0" />
-                <span><strong className="text-slate-800">{event.attendeesCount}</strong> / {event.total_capacity} katılımcı</span>
-              </div>
-
-              <CapacityBar percent={event.capacityPercent} />
-
-              {!isOrganizer && <AttendButton />}
-
-              {isOrganizer && (
-                <Link
-                  href={`/create-event?edit=${eventId}`}
-                  className="w-full py-3.5 rounded-full text-sm font-bold text-slate-700 border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
-                >
-                  Etkinliği Düzenle <ChevronRight size={15} />
-                </Link>
-              )}
+          {/* SAĞ — Sticky CTA */}
+          <div className="hidden lg:block w-80 shrink-0">
+            <div className="sticky top-6">
+              <CTABox />
             </div>
           </div>
         </div>
       </div>
 
-      {/* MOBİL: Fixed bottom CTA */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 pb-safe">
-        <div className="flex items-center gap-3 max-w-md mx-auto">
-          <div className="flex-1">
-            <p className="text-xs text-slate-500 font-medium">
-              {event.is_paid ? 'Bilet Fiyatı' : 'Giriş'}
-            </p>
-            <p className="text-lg font-black text-slate-900">
-              {event.is_paid ? `₺${event.price}` : 'Ücretsiz'}
-            </p>
-          </div>
-          {!isOrganizer && (
-            <div className="flex-1">
-              <AttendButton />
-            </div>
-          )}
-          {isOrganizer && (
-            <Link
-              href={`/create-event?edit=${eventId}`}
-              className="flex-1 py-3.5 rounded-full text-sm font-bold text-slate-700 border border-slate-200 bg-slate-50 flex items-center justify-center"
-            >
-              Düzenle
-            </Link>
-          )}
-        </div>
+      {/* Mobile sticky bottom CTA */}
+      {/* Mobile sticky bottom CTA */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 shadow-2xl">
+        <CTABox mobile />
       </div>
+
+      {/* BURAYA EKLİYORUZ: Bilet Modalı */}
+      {ticketModal && (
+        <TicketSuccessModal
+          isOpen={ticketModal}
+          event={event}
+          onClose={() => setTicketModal(false)}
+        />
+      )}
     </div>
   );
 }

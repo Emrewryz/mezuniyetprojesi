@@ -9,14 +9,14 @@ import { toast } from 'sonner';
 import {
   LayoutGrid, MapPin, TrendingUp, Radio, Calendar,
   Bookmark, X, Ticket, Zap, Plus, Settings, LogOut,
-  ChevronUp, User,
+  ChevronUp, User, Flag,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { icon: LayoutGrid, label: 'Keşfet',        path: '/dashboard' },
   { icon: MapPin,     label: 'Yakınımda',      path: '/nearby' },
   { icon: TrendingUp, label: 'Trendler',       path: '/trends' },
-  { icon: Radio,      label: 'Topluluk',       path: '/live-stream' },
+  { icon: Radio,      label: 'Topluluk',       path: '/community' },
   { icon: Calendar,   label: 'Takvim',         path: '/calendar' },
   { icon: Ticket,     label: 'Etkinliklerim',  path: '/my-events' },
   { icon: Bookmark,   label: 'Kaydettiklerim', path: '/saved' },
@@ -97,6 +97,9 @@ function NavContent({ onClose }: { onClose: () => void }) {
           <Plus size={15} className="shrink-0" />
           Etkinlik Oluştur
         </Link>
+
+        {/* Sorun Bildir */}
+       
 
         {/* Profil */}
         {user && (

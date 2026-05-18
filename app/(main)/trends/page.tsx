@@ -1,505 +1,508 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import {
-  Flame, TrendingUp, Zap, Eye, Users, MapPin,
-  Calendar, ChevronRight, Globe, Music2, Cpu,
-  Palette, Briefcase, PartyPopper, Dumbbell, Gamepad2,
+  Flame, Zap, Crown, Users, MapPin, Globe, Clock,
+  TrendingUp, ChevronRight, Loader2, Timer, Sparkles,
+  Music2, Cpu, Palette, Briefcase, PartyPopper, Dumbbell, Gamepad2,
 } from 'lucide-react';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface TrendEvent {
-  id: string;
-  title: string;
-  category: string;
-  location: string;
-  is_online: boolean;
-  is_paid: boolean;
-  price: number;
-  start_at: string;
+  id: string; title: string; category: string; location: string;
+  is_online: boolean; is_paid: boolean; price: number;
+  start_at: string; end_at: string;
   cover_image_url: string | null;
-  total_capacity: number;
-  attendeesCount: number;
-  trendScore: number;
-  rank: number;
-  trendVelocity: string;
-  sparkline: number[];
+  total_capacity: number; attendees_count: number; fill_pct: number;
+  trend_score: number;
 }
 
-// ─── Sabitler ────────────────────────────────────────────────────────────────
-
-const CATEGORY_META: Record<string, { label: string; icon: any; gradient: string; mesh: string }> = {
-  music:    { label: 'Müzik',     icon: Music2,      gradient: 'from-pink-500 to-rose-600',    mesh: 'linear-gradient(135deg,#1e1b4b,#be185d)' },
-  tech:     { label: 'Teknoloji', icon: Cpu,         gradient: 'from-blue-500 to-cyan-500',    mesh: 'linear-gradient(135deg,#0f172a,#1d4ed8)' },
-  art:      { label: 'Sanat',     icon: Palette,     gradient: 'from-violet-500 to-purple-600',mesh: 'linear-gradient(135deg,#1a0533,#7c3aed)' },
-  business: { label: 'İş',        icon: Briefcase,   gradient: 'from-amber-500 to-orange-500', mesh: 'linear-gradient(135deg,#1c0a00,#d97706)' },
-  social:   { label: 'Sosyal',    icon: PartyPopper, gradient: 'from-emerald-500 to-teal-500', mesh: 'linear-gradient(135deg,#022c22,#059669)' },
-  sport:    { label: 'Spor',      icon: Dumbbell,    gradient: 'from-orange-500 to-red-500',   mesh: 'linear-gradient(135deg,#1c0a00,#ea580c)' },
-  game:     { label: 'Oyun',      icon: Gamepad2,    gradient: 'from-indigo-500 to-blue-700',  mesh: 'linear-gradient(135deg,#0f0c29,#4338ca)' },
+const CAT_META: Record<string, { label: string; icon: any; gradient: string; mesh: string; accent: string }> = {
+  music:    { label: 'Müzik',     icon: Music2,      gradient: 'from-pink-500 to-rose-600',    accent: '#f43f5e', mesh: 'radial-gradient(ellipse at 10% 60%,#f43f5e40 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#be185d30 0%,transparent 55%),linear-gradient(160deg,#12082a 0%,#2d0a38 100%)' },
+  tech:     { label: 'Teknoloji', icon: Cpu,         gradient: 'from-blue-500 to-cyan-500',    accent: '#3b82f6', mesh: 'radial-gradient(ellipse at 10% 60%,#3b82f640 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#06b6d430 0%,transparent 55%),linear-gradient(160deg,#050e1f 0%,#0a1f3d 100%)' },
+  art:      { label: 'Sanat',     icon: Palette,     gradient: 'from-violet-500 to-purple-600', accent: '#8b5cf6', mesh: 'radial-gradient(ellipse at 10% 60%,#8b5cf640 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#a855f730 0%,transparent 55%),linear-gradient(160deg,#0e0520 0%,#1e0a3c 100%)' },
+  business: { label: 'İş',        icon: Briefcase,   gradient: 'from-amber-500 to-orange-500', accent: '#f59e0b', mesh: 'radial-gradient(ellipse at 10% 60%,#f59e0b40 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#ea580c30 0%,transparent 55%),linear-gradient(160deg,#180d00 0%,#2d1500 100%)' },
+  social:   { label: 'Sosyal',    icon: PartyPopper, gradient: 'from-emerald-500 to-teal-500', accent: '#10b981', mesh: 'radial-gradient(ellipse at 10% 60%,#10b98140 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#0d948130 0%,transparent 55%),linear-gradient(160deg,#01180e 0%,#022c1a 100%)' },
+  sport:    { label: 'Spor',      icon: Dumbbell,    gradient: 'from-orange-500 to-red-600',   accent: '#f97316', mesh: 'radial-gradient(ellipse at 10% 60%,#f9731640 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#dc262630 0%,transparent 55%),linear-gradient(160deg,#180700 0%,#2d0a00 100%)' },
+  game:     { label: 'Oyun',      icon: Gamepad2,    gradient: 'from-indigo-500 to-violet-600', accent: '#6366f1', mesh: 'radial-gradient(ellipse at 10% 60%,#6366f140 0%,transparent 55%),radial-gradient(ellipse at 90% 20%,#7c3aed30 0%,transparent 55%),linear-gradient(160deg,#06040f 0%,#0f0c29 100%)' },
 };
 
 const FILTERS = [
   { value: 'all', label: 'Tümü' },
-  { value: 'music', label: 'Müzik' },
-  { value: 'tech', label: 'Teknoloji' },
-  { value: 'art', label: 'Sanat' },
-  { value: 'business', label: 'İş' },
-  { value: 'social', label: 'Sosyal' },
+  ...Object.entries(CAT_META).map(([v, { label }]) => ({ value: v, label })),
 ];
 
-const TIMEFRAMES = [
-  { value: 'today', label: 'Bugün' },
-  { value: 'week', label: 'Bu Hafta' },
-];
+// ─── FOMO Logic ───────────────────────────────────────────────────────────────
 
-const VELOCITIES = [
-  (n: number) => `🔥 Son 24 saatte +${n} inceleme`,
-  (n: number) => `⚡ Şu an ${n} kişi bakıyor`,
-  (n: number) => `📈 Bu hafta +%${n} büyüme`,
-  (n: number) => `🎯 ${n} yeni katılım bugün`,
-];
-
-function genSparkline(seed: number): number[] {
-  let v = 20 + (seed % 30);
-  return Array.from({ length: 8 }, (_, i) => {
-    v = Math.max(10, Math.min(95, v + (Math.sin(seed * i) * 15 + (i * 4))));
-    return Math.round(v);
-  });
+function getPrimaryFomo(ev: TrendEvent, rank: number) {
+  const left = ev.total_capacity > 0 ? ev.total_capacity - ev.attendees_count : null;
+  if (rank === 0) return { emoji: '👑', text: 'Şehrin En Popüler Etkinliği', bg: 'from-amber-400 to-orange-500' };
+  if (left !== null && left <= 5)  return { emoji: '🔥', text: `Son ${left} yer — Tükenmek üzere!`, bg: 'from-red-500 to-rose-600' };
+  if (ev.fill_pct >= 85) return { emoji: '🏃', text: `%${ev.fill_pct} Dolu — Hızla tükeniyor`, bg: 'from-orange-500 to-red-500' };
+  if (ev.fill_pct >= 60) return { emoji: '⚡', text: `Son ${left ?? ''} yer kaldı`, bg: 'from-amber-500 to-orange-500' };
+  const sold = Math.min(ev.attendees_count, 99);
+  return { emoji: '🔥', text: `Son 24 saatte ${sold} bilet satıldı`, bg: 'from-blue-500 to-blue-600' };
 }
 
-function genVelocity(id: string, score: number): string {
-  const idx = id.charCodeAt(0) % VELOCITIES.length;
-  const n = 20 + (score % 480);
-  return VELOCITIES[idx](n);
+function getCardBadge(ev: TrendEvent) {
+  const left = ev.total_capacity > 0 ? ev.total_capacity - ev.attendees_count : null;
+  if (left !== null && left <= 3)  return { text: `🔥 Son ${left} bilet`, cls: 'bg-red-500 text-white' };
+  if (left !== null && left <= 10) return { text: `⚡ Son ${left} yer`, cls: 'bg-orange-500 text-white' };
+  if (ev.fill_pct >= 75) return { text: `🏃 %${ev.fill_pct} dolu`, cls: 'bg-amber-500 text-white' };
+  if (ev.attendees_count >= 80) return { text: `⭐ ${ev.attendees_count} katılımcı`, cls: 'bg-violet-500 text-white' };
+  return { text: `👥 ${ev.attendees_count} katılıyor`, cls: 'bg-blue-500 text-white' };
 }
 
-function processEvents(raw: any[]): TrendEvent[] {
-  return raw
-    .map((ev, i) => {
-      const count = ev.event_attendees?.[0]?.count ?? 0;
-      const daysUntil = Math.max(1, Math.round((new Date(ev.start_at).getTime() - Date.now()) / 86400000));
-      const trendScore = Math.round((count * 100) / daysUntil + (ev.price === 0 ? 200 : 0));
-      return {
-        ...ev,
-        attendeesCount: count,
-        trendScore,
-        sparkline: genSparkline(trendScore + i),
-        trendVelocity: genVelocity(ev.id, trendScore),
-        rank: 0,
-      };
-    })
-    .sort((a, b) => b.trendScore - a.trendScore)
-    .map((ev, i) => ({ ...ev, rank: i + 1 }));
-}
+// ─── Live Counter (animasyonlu) ───────────────────────────────────────────────
 
-// ─── Sparkline SVG ────────────────────────────────────────────────────────────
-
-function Sparkline({ data, color = '#3b82f6', height = 32, width = 80 }: {
-  data: number[]; color?: string; height?: number; width?: number;
-}) {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const xs = data.map((_, i) => (i / (data.length - 1)) * width);
-  const ys = data.map((v) => height - ((v - min) / range) * height * 0.85 - height * 0.075);
-  const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
-  const fill = `${d} L${width},${height} L0,${height} Z`;
+function LiveDot() {
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-      <defs>
-        <linearGradient id={`sg-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={fill} fill={`url(#sg-${color.replace('#','')})`} />
-      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={xs[xs.length-1]} cy={ys[ys.length-1]} r="3" fill={color} />
-    </svg>
-  );
-}
-
-// ─── Rank Badge ───────────────────────────────────────────────────────────────
-
-function RankBadge({ rank, large = false }: { rank: number; large?: boolean }) {
-  const colors = ['from-amber-400 to-yellow-500', 'from-slate-400 to-slate-500', 'from-orange-400 to-amber-500'];
-  const gradient = colors[rank - 1] || 'from-slate-300 to-slate-400';
-  return (
-    <div className={`flex items-center justify-center rounded-full font-black text-white bg-gradient-to-br ${gradient} shadow-lg ${large ? 'w-10 h-10 text-base' : 'w-7 h-7 text-xs'}`}>
-      #{rank}
-    </div>
-  );
-}
-
-// ─── Velocity Badge ───────────────────────────────────────────────────────────
-
-function VelocityBadge({ text, dark = false }: { text: string; dark?: boolean }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${
-      dark ? 'bg-white/15 text-white backdrop-blur-sm' : 'bg-slate-100 text-slate-700'
-    }`}>
-      {text}
+    <span className="relative flex h-2 w-2 shrink-0">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
     </span>
   );
 }
 
-// ─── Cover Background ─────────────────────────────────────────────────────────
+// ─── Bento Hero (büyük kart) ──────────────────────────────────────────────────
 
-function CoverBg({ event, className = '' }: { event: TrendEvent; className?: string }) {
-  const meta = CATEGORY_META[event.category];
+function BentoHero({ ev, rank }: { ev: TrendEvent; rank: number }) {
+  const meta = CAT_META[ev.category];
+  const fomo = getPrimaryFomo(ev, rank);
+  const fmtDate = new Date(ev.start_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  const fmtTime = new Date(ev.start_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
   return (
-    <>
-      {event.cover_image_url ? (
-        <Image src={event.cover_image_url} alt={event.title} fill className={`object-cover ${className}`} unoptimized />
+    <motion.div className="relative h-full rounded-[28px] overflow-hidden group cursor-pointer"
+      whileHover={{ scale: 1.012 }} transition={{ duration: 0.22 }}>
+      <Link href={`/event-detail/${ev.id}`} className="absolute inset-0 z-20" />
+
+      {/* Arkaplan */}
+      {ev.cover_image_url ? (
+        <Image src={ev.cover_image_url} alt={ev.title} fill
+          className="object-cover group-hover:scale-105 transition-transform duration-700" unoptimized />
       ) : (
-        <div className="absolute inset-0" style={{ background: meta?.mesh || '#1e293b' }} />
+        <div className="absolute inset-0" style={{ background: meta?.mesh || '#1e293b' }}>
+          {meta && <meta.icon size={180} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/[0.04]" />}
+        </div>
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-    </>
-  );
-}
 
-// ─── Card Variants ────────────────────────────────────────────────────────────
+      {/* Katmanlar */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/20" />
 
-function HeroCard({ event }: { event: TrendEvent }) {
-  const meta = CATEGORY_META[event.category];
-  const fmtDate = new Date(event.start_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'short' });
-  return (
-    <motion.div
-      whileHover={{ y: -4, scale: 1.005 }}
-      transition={{ duration: 0.2 }}
-      className="relative col-span-2 row-span-2 rounded-3xl overflow-hidden min-h-[360px] group"
-    >
-      <CoverBg event={event} className="group-hover:scale-105 transition-transform duration-700" />
-      <div className="absolute inset-0 p-7 flex flex-col justify-between z-10">
-        <div className="flex items-start justify-between">
-          <RankBadge rank={event.rank} large />
-          <VelocityBadge text={event.trendVelocity} dark />
-        </div>
-        <div className="flex flex-col gap-3">
-          {meta && (
-            <span className={`self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${meta.gradient}`}>
-              <meta.icon size={11} /> {meta.label}
-            </span>
-          )}
-          <h2 className="text-2xl font-black text-white leading-tight line-clamp-2 tracking-tight">{event.title}</h2>
-          <div className="flex items-center gap-4 text-white/70 text-xs font-medium">
-            <span className="flex items-center gap-1"><Calendar size={11} />{fmtDate}</span>
-            <span className="flex items-center gap-1"><Users size={11} />{event.attendeesCount} katılımcı</span>
-            <span className="flex items-center gap-1">
-              {event.is_online ? <Globe size={11} /> : <MapPin size={11} />}
-              {event.location}
-            </span>
+      {/* Rank Badge */}
+      <div className="absolute top-4 left-4 z-10">
+        {rank === 0 ? (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30">
+            <Crown size={12} className="text-white" />
+            <span className="text-[10px] font-black text-white uppercase tracking-wide">Trend #1</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className={`text-lg font-black ${event.is_paid ? 'text-white' : 'text-emerald-400'}`}>
-              {event.is_paid ? `₺${event.price}` : 'Ücretsiz'}
-            </span>
-            <Link
-              href={`/event-detail/${event.id}`}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-slate-900 rounded-full text-sm font-bold hover:bg-blue-50 transition-colors shadow-lg"
-            >
-              İncele <ChevronRight size={14} />
-            </Link>
+        ) : (
+          <div className="px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20">
+            <span className="text-xs font-black text-white">#{rank + 1}</span>
           </div>
-        </div>
+        )}
       </div>
-    </motion.div>
-  );
-}
 
-function WideCard({ event }: { event: TrendEvent }) {
-  const meta = CATEGORY_META[event.category];
-  const fmtDate = new Date(event.start_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-  return (
-    <motion.div
-      whileHover={{ y: -3 }}
-      transition={{ duration: 0.2 }}
-      className="relative col-span-2 rounded-3xl overflow-hidden min-h-[160px] group"
-    >
-      <CoverBg event={event} className="group-hover:scale-105 transition-transform duration-700" />
-      <div className="absolute inset-0 p-5 flex items-end justify-between z-10">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <RankBadge rank={event.rank} />
-            {meta && (
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${meta.gradient}`}>
-                <meta.icon size={9} /> {meta.label}
-              </span>
-            )}
-            <VelocityBadge text={event.trendVelocity} dark />
-          </div>
-          <h3 className="text-base font-black text-white leading-snug line-clamp-1">{event.title}</h3>
-          <div className="flex items-center gap-3 text-white/60 text-[11px]">
-            <span className="flex items-center gap-1"><Calendar size={9} />{fmtDate}</span>
-            <span className="flex items-center gap-1"><Users size={9} />{event.attendeesCount}</span>
-          </div>
+      {/* Live indicator (yüksek dolulukta) */}
+      {ev.fill_pct >= 60 && (
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10">
+          <LiveDot />
+          <span className="text-[10px] font-bold text-white">Canlı</span>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <Sparkline data={event.sparkline} color="#60a5fa" width={72} height={28} />
-          <Link href={`/event-detail/${event.id}`} className="flex items-center gap-1 px-3 py-1.5 bg-white/20 backdrop-blur-sm text-white rounded-full text-xs font-bold hover:bg-white/30 transition-colors">
-            İncele <ChevronRight size={11} />
-          </Link>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+      )}
 
-function SquareCard({ event }: { event: TrendEvent }) {
-  const meta = CATEGORY_META[event.category];
-  return (
-    <motion.div
-      whileHover={{ y: -3, scale: 1.02 }}
-      transition={{ duration: 0.2 }}
-      className="relative rounded-3xl overflow-hidden min-h-[160px] group"
-    >
-      <CoverBg event={event} className="group-hover:scale-105 transition-transform duration-700" />
-      <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
-        <div className="flex items-start justify-between">
-          <RankBadge rank={event.rank} />
-          {meta && <meta.icon size={16} className="text-white/60" />}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <VelocityBadge text={event.trendVelocity} dark />
-          <h3 className="text-sm font-black text-white leading-snug line-clamp-2">{event.title}</h3>
-          <span className={`self-start text-xs font-bold ${event.is_paid ? 'text-white/80' : 'text-emerald-400'}`}>
-            {event.is_paid ? `₺${event.price}` : 'Ücretsiz'}
+      {/* Fiyat */}
+      {!ev.fill_pct || ev.fill_pct < 60 ? (
+        <div className="absolute top-4 right-4 z-10">
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black shadow-sm backdrop-blur-md ${ev.is_paid ? 'bg-black/30 text-white border border-white/10' : 'bg-emerald-500/80 text-white'}`}>
+            {ev.is_paid ? `₺${ev.price}` : 'Ücretsiz'}
           </span>
         </div>
+      ) : null}
+
+      {/* Content */}
+      <div className="absolute bottom-0 left-0 right-0 p-5 z-10">
+        {/* FOMO Badge */}
+        <div className={`self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black mb-3 bg-gradient-to-r ${fomo.bg} shadow-lg`}>
+          <span>{fomo.emoji}</span>
+          <span className="text-white">{fomo.text}</span>
+        </div>
+
+        <h3 className="text-lg font-black text-white leading-tight line-clamp-2 mb-2 drop-shadow-sm">{ev.title}</h3>
+
+        <div className="flex items-center gap-4 text-white/60 text-[11px] mb-3">
+          <span className="flex items-center gap-1.5"><Clock size={10} />{fmtDate} · {fmtTime}</span>
+          <span className="flex items-center gap-1.5">{ev.is_online ? <Globe size={10} /> : <MapPin size={10} />}{ev.location.split(',')[0]}</span>
+        </div>
+
+        {/* Capacity */}
+        {ev.total_capacity > 0 && (
+          <div>
+            <div className="flex justify-between text-[10px] mb-1.5">
+              <span className="text-white/50 flex items-center gap-1"><Users size={9} />{ev.attendees_count} kayıtlı</span>
+              <span className={`font-bold ${ev.fill_pct >= 90 ? 'text-red-400' : ev.fill_pct >= 70 ? 'text-amber-400' : 'text-white/60'}`}>%{ev.fill_pct}</span>
+            </div>
+            <div className="h-1.5 bg-white/15 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }} animate={{ width: `${ev.fill_pct}%` }} transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+                className={`h-full rounded-full ${ev.fill_pct >= 90 ? 'bg-red-400' : ev.fill_pct >= 70 ? 'bg-amber-400' : 'bg-blue-400'}`} />
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );
 }
 
-function HorizontalCard({ event }: { event: TrendEvent }) {
-  const meta = CATEGORY_META[event.category];
-  const fmtDate = new Date(event.start_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-  const capacityPct = event.total_capacity > 0
-    ? Math.min(Math.round((event.attendeesCount / event.total_capacity) * 100), 100)
-    : 0;
+// ─── Bento Small ─────────────────────────────────────────────────────────────
+
+function BentoSmall({ ev, rank }: { ev: TrendEvent; rank: number }) {
+  const meta = CAT_META[ev.category];
+  const fomo = getPrimaryFomo(ev, rank);
+  const fmtDate = new Date(ev.start_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+
   return (
-    <motion.div
-      whileHover={{ x: 4 }}
-      transition={{ duration: 0.18 }}
-      className="col-span-2 bg-white rounded-3xl border border-slate-100 shadow-[0_2px_16px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.10)] transition-shadow flex gap-4 p-4 items-center group"
-    >
-      <div className="relative w-16 h-16 rounded-2xl overflow-hidden shrink-0">
-        {event.cover_image_url
-          ? <Image src={event.cover_image_url} alt={event.title} fill className="object-cover" unoptimized />
-          : <div className="absolute inset-0" style={{ background: meta?.mesh || '#1e293b' }} />
-        }
+    <motion.div className="relative h-full rounded-[22px] overflow-hidden group cursor-pointer"
+      whileHover={{ scale: 1.015 }} transition={{ duration: 0.2 }}>
+      <Link href={`/event-detail/${ev.id}`} className="absolute inset-0 z-20" />
+
+      {ev.cover_image_url ? (
+        <Image src={ev.cover_image_url} alt={ev.title} fill
+          className="object-cover group-hover:scale-105 transition-transform duration-500" unoptimized />
+      ) : (
+        <div className="absolute inset-0" style={{ background: meta?.mesh || '#1e293b' }}>
+          {meta && <meta.icon size={80} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/[0.05]" />}
+        </div>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+      <div className="absolute top-3 left-3 z-10">
+        <div className="px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-md">
+          <span className="text-[10px] font-black text-white">#{rank + 1}</span>
+        </div>
       </div>
-      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <RankBadge rank={event.rank} />
+
+      <div className="absolute bottom-0 left-0 right-0 p-3.5 z-10">
+        <div className={`self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black mb-2 bg-gradient-to-r ${fomo.bg}`}>
+          <span>{fomo.emoji}</span><span className="text-white">{fomo.text}</span>
+        </div>
+        <h4 className="text-xs font-black text-white leading-tight line-clamp-2 mb-1.5">{ev.title}</h4>
+        <div className="flex items-center justify-between text-[9px] text-white/50">
+          <span className="flex items-center gap-1"><Clock size={8} />{fmtDate}</span>
+          <span className={`font-bold ${ev.is_paid ? 'text-white/70' : 'text-emerald-400'}`}>{ev.is_paid ? `₺${ev.price}` : 'Ücretsiz'}</span>
+        </div>
+        {ev.total_capacity > 0 && (
+          <div className="h-1 bg-white/15 rounded-full overflow-hidden mt-2">
+            <motion.div initial={{ width: 0 }} animate={{ width: `${ev.fill_pct}%` }} transition={{ duration: 1, ease: 'easeOut', delay: 0.4 }}
+              className={`h-full rounded-full ${ev.fill_pct >= 90 ? 'bg-red-400' : ev.fill_pct >= 70 ? 'bg-amber-400' : 'bg-blue-400'}`} />
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Showcase Card ────────────────────────────────────────────────────────────
+
+function ShowcaseCard({ ev, badgeText, badgeCls }: { ev: TrendEvent; badgeText: string; badgeCls: string }) {
+  const meta = CAT_META[ev.category];
+  const fmtDate = new Date(ev.start_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+  const hoursLeft = Math.max(0, Math.round((new Date(ev.start_at).getTime() - Date.now()) / 3600000));
+  const isUrgent = hoursLeft < 48;
+
+  return (
+    <motion.div whileHover={{ y: -5 }} transition={{ duration: 0.2 }} className="shrink-0 w-56">
+      <Link href={`/event-detail/${ev.id}`}
+        className="flex flex-col bg-white rounded-3xl border border-slate-100 shadow-[0_2px_16px_rgba(0,0,0,0.06)] overflow-hidden hover:shadow-[0_8px_32px_rgba(0,0,0,0.12)] transition-all duration-300 group">
+        <div className="relative h-32 overflow-hidden">
+          {ev.cover_image_url
+            ? <Image src={ev.cover_image_url} alt={ev.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" unoptimized />
+            : <div className="absolute inset-0" style={{ background: meta?.mesh || '#1e293b' }}>
+                {meta && <meta.icon size={32} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/10" />}
+              </div>
+          }
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+          <div className="absolute bottom-2 left-2">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black shadow-sm ${badgeCls}`}>
+              {badgeText}
+            </span>
+          </div>
+          {isUrgent && hoursLeft > 0 && (
+            <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm rounded-full">
+              <span className="text-[9px] font-black text-white flex items-center gap-0.5">
+                <Timer size={8} /> {hoursLeft}s
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="p-3 flex flex-col gap-1.5">
           {meta && (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${meta.gradient}`}>
-              <meta.icon size={9} /> {meta.label}
+            <span className={`self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold text-white bg-gradient-to-r ${meta.gradient}`}>
+              <meta.icon size={8} /> {meta.label}
             </span>
           )}
-          <span className="text-[10px] text-slate-400 font-medium">{event.trendVelocity}</span>
-        </div>
-        <p className="text-sm font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">{event.title}</p>
-        <div className="flex items-center gap-3 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1"><Calendar size={9} />{fmtDate}</span>
-          <span className="flex items-center gap-1"><MapPin size={9} />{event.location}</span>
-        </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-400 rounded-full" style={{ width: `${capacityPct}%` }} />
+          <h4 className="text-[11px] font-black text-slate-900 line-clamp-2 leading-tight">{ev.title}</h4>
+          <div className="flex items-center justify-between text-[9px] text-slate-400">
+            <span className="flex items-center gap-0.5"><MapPin size={8} />{ev.location.split(',')[0]}</span>
+            <span className={`font-black ${ev.is_paid ? 'text-slate-600' : 'text-emerald-600'}`}>
+              {ev.is_paid ? `₺${ev.price}` : 'Ücretsiz'}
+            </span>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium shrink-0">{event.attendeesCount} katılımcı</span>
+          {ev.total_capacity > 0 && (
+            <div>
+              <div className="flex justify-between text-[8px] text-slate-400 mb-0.5">
+                <span className="flex items-center gap-0.5"><Users size={7} /> {ev.attendees_count}</span>
+                <span className={`font-bold ${ev.fill_pct >= 80 ? 'text-red-500' : 'text-slate-400'}`}>%{ev.fill_pct}</span>
+              </div>
+              <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${ev.fill_pct >= 90 ? 'bg-red-400' : ev.fill_pct >= 70 ? 'bg-amber-400' : 'bg-blue-500'}`}
+                  style={{ width: `${ev.fill_pct}%` }} />
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-      <div className="shrink-0 flex flex-col items-end gap-2">
-        <Sparkline data={event.sparkline} color="#8b5cf6" width={56} height={24} />
-        <Link href={`/event-detail/${event.id}`} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-500 hover:text-white transition-colors">
-          <ChevronRight size={13} />
-        </Link>
-      </div>
+      </Link>
     </motion.div>
   );
 }
 
-function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-200 rounded-3xl ${className}`} />;
+// ─── Horizontal Showcase ──────────────────────────────────────────────────────
+
+function Showcase({ title, subtitle, events, badgeFn, emptyText }: {
+  title: string; subtitle?: string;
+  events: TrendEvent[];
+  badgeFn: (ev: TrendEvent) => { text: string; cls: string };
+  emptyText?: string;
+}) {
+  if (events.length === 0) return null;
+  return (
+    <div>
+      <div className="flex items-end justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-black text-slate-900 tracking-tight">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
+        <Link href="/dashboard" className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 transition-colors shrink-0">
+          Tümü <ChevronRight size={13} />
+        </Link>
+      </div>
+      <div className="flex gap-3.5 overflow-x-auto scrollbar-hide pb-3 -mx-4 px-4">
+        {events.map(ev => {
+          const { text, cls } = badgeFn(ev);
+          return <ShowcaseCard key={ev.id} ev={ev} badgeText={text} badgeCls={cls} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Bento Skeleton ───────────────────────────────────────────────────────────
+
+function BentoSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3 h-[440px]">
+      <div className="row-span-2 bg-slate-200 rounded-[28px] animate-pulse" />
+      <div className="bg-slate-200 rounded-[22px] animate-pulse" />
+      <div className="bg-slate-200 rounded-[22px] animate-pulse" />
+    </div>
+  );
 }
 
 // ─── Ana Sayfa ─────────────────────────────────────────────────────────────────
 
 export default function TrendsPage() {
-  const [events, setEvents] = useState<TrendEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<TrendEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [timeframe, setTimeframe] = useState('week');
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [userCity, setUserCity] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const now = new Date();
-      const cutoff = timeframe === 'today'
-        ? new Date(now.getTime() + 86400000).toISOString()
-        : new Date(now.getTime() + 7 * 86400000).toISOString();
-
-      const { data } = await supabase
-        .from('events')
-        .select('*, event_attendees(count)')
-        .eq('status', 'published')
-        .gte('end_at', now.toISOString())
-        .lte('start_at', cutoff)
-        .limit(12);
-
-      if (data && data.length > 0) {
-        setEvents(processEvents(data));
-      } else {
-        // Fallback: son eklenen published etkinlikler
-        const { data: fallback } = await supabase
-          .from('events')
-          .select('*, event_attendees(count)')
-          .eq('status', 'published')
-          .gte('end_at', now.toISOString())
-          .order('created_at', { ascending: false })
-          .limit(12);
-        setEvents(processEvents(fallback || []));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles').select('city').eq('id', user.id).single();
+        setUserCity(profile?.city || null);
       }
+
+      const { data: events } = await supabase
+        .from('events')
+        .select('id,title,category,location,is_online,is_paid,price,start_at,end_at,cover_image_url,total_capacity,event_attendees(count)')
+        .eq('status', 'published')
+        .gte('end_at', new Date().toISOString())
+        .order('start_at', { ascending: true })
+        .limit(60);
+
+      const mapped: TrendEvent[] = (events || []).map((e: any) => {
+        const cnt = Number(e.event_attendees?.[0]?.count ?? 0);
+        const fill = e.total_capacity > 0 ? Math.min(Math.round((cnt / e.total_capacity) * 100), 100) : 0;
+        const score = fill * 0.55 + cnt * 0.45;
+        return { ...e, attendees_count: cnt, fill_pct: fill, trend_score: score };
+      });
+
+      setAllEvents(mapped);
       setLoading(false);
     })();
-  }, [timeframe]);
+  }, []);
 
-  const filtered = filter === 'all' ? events : events.filter((e) => e.category === filter);
+  const base = activeFilter === 'all' ? allEvents : allEvents.filter(e => e.category === activeFilter);
+  const sorted = [...base].sort((a, b) => b.trend_score - a.trend_score);
+  const bentoItems = sorted.slice(0, 3);
+  const fastFilling = [...base].filter(e => e.fill_pct >= 40).sort((a, b) => b.fill_pct - a.fill_pct).slice(0, 12);
+  const communityFaves = [...base].sort((a, b) => b.attendees_count - a.attendees_count).slice(0, 12);
 
-  const [hero, wide, ...rest] = filtered;
-  const squares = rest.filter((_, i) => i % 3 !== 2);
-  const horizontals = rest.filter((_, i) => i % 3 === 2);
+  const cityLabel = userCity ? `${userCity}'da` : 'Şehrinde';
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f5f7f9]">
-      <div className="px-5 md:px-10 py-8 max-w-7xl mx-auto w-full flex flex-col gap-6">
+    <div className="flex flex-col gap-8 pb-6">
 
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center shadow-md shadow-orange-200">
-                <Flame size={14} className="text-white" />
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Canlı Trendler</span>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center shadow-md shadow-red-200">
+              <Flame size={15} className="text-white" />
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Ne Trend?</h1>
-            <p className="text-sm text-slate-400 mt-0.5">{filtered.length} etkinlik sıralandı</p>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-red-50 border border-red-100 rounded-full">
+              <LiveDot />
+              <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Canlı Trendler</span>
+            </div>
           </div>
-          {/* Timeframe toggle */}
-          <div className="flex p-1 bg-white border border-slate-200 rounded-xl shadow-sm">
-            {TIMEFRAMES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => { setTimeframe(t.value); setLoading(true); }}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                  timeframe === t.value ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">
+            {cityLabel} Ne Trend?
+          </h1>
+          <p className="text-sm text-slate-400 mt-1.5">En popüler, en hızlı tükenen etkinlikleri kaçırma.</p>
         </div>
+        <div className="text-right">
+          <p className="text-2xl font-black text-slate-900">{base.length}</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Aktif Etkinlik</p>
+        </div>
+      </div>
 
-        {/* Filter chips */}
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                filter === f.value
+      {/* Filtreler */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+        {FILTERS.map(f => {
+          const meta = CAT_META[f.value as keyof typeof CAT_META];
+          const Icon = meta?.icon;
+          return (
+            <button key={f.value} onClick={() => setActiveFilter(f.value)}
+              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold transition-all ${
+                activeFilter === f.value
                   ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-800'
-              }`}
-            >
+                  : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700'
+              }`}>
+              {Icon && <Icon size={11} className={activeFilter === f.value ? 'text-white' : 'text-slate-400'} />}
               {f.label}
             </button>
+          );
+        })}
+      </div>
+
+      {/* Bento Grid */}
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <BentoSkeleton />
+        ) : bentoItems.length === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="flex flex-col items-center gap-4 py-20 text-center">
+            <div className="w-14 h-14 rounded-3xl bg-slate-100 flex items-center justify-center">
+              <TrendingUp size={22} className="text-slate-300" />
+            </div>
+            <p className="text-sm font-semibold text-slate-500">Bu kategoride henüz trend yok.</p>
+            <button onClick={() => setActiveFilter('all')} className="text-xs font-semibold text-blue-500 hover:text-blue-700">
+              Tüm trendleri gör
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div key={activeFilter} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}>
+            {/* Desktop: 3 kolon, Mobile: 2 kolon */}
+            <div className="hidden md:grid grid-cols-3 gap-3" style={{ height: 460 }}>
+              {bentoItems[0] && (
+                <div className="row-span-2" style={{ gridRow: 'span 2' }}>
+                  <BentoHero ev={bentoItems[0]} rank={0} />
+                </div>
+              )}
+              {bentoItems[1] && <BentoSmall ev={bentoItems[1]} rank={1} />}
+              {bentoItems[2] && <BentoSmall ev={bentoItems[2]} rank={2} />}
+            </div>
+            {/* Mobile: 2 kolon */}
+            <div className="grid md:hidden grid-cols-2 gap-3" style={{ height: 380 }}>
+              {bentoItems[0] && (
+                <div className="row-span-2" style={{ gridRow: 'span 2' }}>
+                  <BentoHero ev={bentoItems[0]} rank={0} />
+                </div>
+              )}
+              {bentoItems[1] && <BentoSmall ev={bentoItems[1]} rank={1} />}
+              {bentoItems[2] && <BentoSmall ev={bentoItems[2]} rank={2} />}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Separator */}
+      {!loading && base.length > 0 && (
+        <div className="flex items-center gap-4">
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <Sparkles size={10} /> Keşif Vitrinleri
+          </span>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
+      )}
+
+      {/* Vitrin 1 */}
+      {!loading && (
+        <Showcase
+          title="Hızla Tükenenler ⚡"
+          subtitle="Kapasite dolmadan yerinizi alın"
+          events={fastFilling}
+          badgeFn={(ev) => {
+            const left = ev.total_capacity > 0 ? ev.total_capacity - ev.attendees_count : null;
+            if (left !== null && left <= 3)  return { text: `🔥 Son ${left} bilet`, cls: 'bg-red-500 text-white' };
+            if (left !== null && left <= 8)  return { text: `⚡ Son ${left} yer`, cls: 'bg-orange-500 text-white' };
+            if (ev.fill_pct >= 80) return { text: `🏃 %${ev.fill_pct} dolu`, cls: 'bg-amber-500 text-white' };
+            return { text: `⚡ Dolmak üzere`, cls: 'bg-amber-400 text-white' };
+          }}
+        />
+      )}
+
+      {/* Vitrin 2 */}
+      {!loading && (
+        <Showcase
+          title="Topluluğun Gözdeleri 🌟"
+          subtitle="Herkesin konuştuğu etkinlikler"
+          events={communityFaves}
+          badgeFn={(ev) => {
+            if (ev.attendees_count >= 100) return { text: `⭐ ${ev.attendees_count} katılımcı`, cls: 'bg-violet-500 text-white' };
+            if (ev.attendees_count >= 50)  return { text: `🎯 ${ev.attendees_count} kişi`, cls: 'bg-blue-500 text-white' };
+            if (ev.attendees_count >= 20)  return { text: `🌟 Popüler`, cls: 'bg-indigo-500 text-white' };
+            return { text: `👥 ${ev.attendees_count} katılıyor`, cls: 'bg-emerald-500 text-white' };
+          }}
+        />
+      )}
+
+      {/* Loading carousels skeleton */}
+      {loading && (
+        <div className="flex flex-col gap-8">
+          {[0, 1].map(i => (
+            <div key={i} className="flex flex-col gap-4">
+              <div className="h-5 w-44 bg-slate-200 rounded-lg animate-pulse" />
+              <div className="flex gap-3.5 overflow-hidden">
+                {[...Array(4)].map((_, j) => (
+                  <div key={j} className="shrink-0 w-56 h-52 bg-slate-200 rounded-3xl animate-pulse" />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-
-        {/* Bento Grid */}
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Skeleton className="col-span-2 row-span-2 min-h-[360px]" />
-            <Skeleton className="col-span-2 min-h-[160px]" />
-            <Skeleton className="min-h-[160px]" />
-            <Skeleton className="min-h-[160px]" />
-            <Skeleton className="col-span-2 min-h-[88px]" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-            <TrendingUp size={40} className="text-slate-300" />
-            <p className="text-slate-600 font-semibold">Trend etkinlik bulunamadı</p>
-            <p className="text-sm text-slate-400">Farklı filtre veya zaman aralığı dene.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-auto">
-            {hero && <HeroCard event={hero} />}
-            {wide && <WideCard event={wide} />}
-            {squares.map((ev) => <SquareCard key={ev.id} event={ev} />)}
-            {horizontals.map((ev) => <HorizontalCard key={ev.id} event={ev} />)}
-          </div>
-        )}
-
-        {/* Leaderboard tablo */}
-        {!loading && filtered.length > 0 && (
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-              <Zap size={15} className="text-amber-500" />
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Tam Sıralama</h2>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {filtered.map((ev, i) => {
-                const meta = CATEGORY_META[ev.category];
-                return (
-                  <motion.div
-                    key={ev.id}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50 transition-colors group"
-                  >
-                    <div className="w-8 text-center">
-                      <RankBadge rank={ev.rank} />
-                    </div>
-                    <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 relative">
-                      {ev.cover_image_url
-                        ? <Image src={ev.cover_image_url} alt={ev.title} fill className="object-cover" unoptimized />
-                        : <div className="absolute inset-0" style={{ background: meta?.mesh || '#1e293b' }} />
-                      }
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">{ev.title}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{ev.trendVelocity}</p>
-                    </div>
-                    <div className="hidden sm:block shrink-0">
-                      <Sparkline data={ev.sparkline} color="#3b82f6" width={60} height={22} />
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
-                        <p className="text-xs font-black text-slate-800">{ev.trendScore.toLocaleString()}</p>
-                        <p className="text-[10px] text-slate-400">puan</p>
-                      </div>
-                      <Link href={`/event-detail/${ev.id}`} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-500 hover:text-white transition-colors">
-                        <ChevronRight size={13} />
-                      </Link>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
