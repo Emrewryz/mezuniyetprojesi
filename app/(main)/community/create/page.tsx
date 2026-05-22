@@ -2,24 +2,25 @@
 
 import { useState, ChangeEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import {
-  CloudUpload, X, ChevronLeft, Loader2, Zap, Check,
+  ChevronLeft, Loader2, Check, Lock, AlertCircle,
   Music2, Cpu, Palette, Briefcase, PartyPopper, Dumbbell, Gamepad2,
-  MapPin, Users, Lock, AlertCircle,
+  CloudUpload, Users, MapPin,
 } from 'lucide-react';
 
+// ─── Sabitler ─────────────────────────────────────────────────────────────────
+
 const CATEGORIES = [
-  { value: 'music',    label: 'Müzik',      icon: Music2,      gradient: 'from-pink-400 to-rose-500' },
-  { value: 'tech',     label: 'Teknoloji',  icon: Cpu,         gradient: 'from-blue-400 to-blue-600' },
-  { value: 'art',      label: 'Sanat',      icon: Palette,     gradient: 'from-violet-400 to-purple-600' },
-  { value: 'business', label: 'İş',         icon: Briefcase,   gradient: 'from-amber-400 to-orange-500' },
-  { value: 'social',   label: 'Sosyal',     icon: PartyPopper, gradient: 'from-emerald-400 to-teal-500' },
-  { value: 'sport',    label: 'Spor',       icon: Dumbbell,    gradient: 'from-orange-400 to-red-500' },
-  { value: 'game',     label: 'Oyun',       icon: Gamepad2,    gradient: 'from-indigo-400 to-blue-600' },
+  { value: 'music',    label: 'Müzik',     icon: Music2,      from: '#f472b6', to: '#f43f5e' },
+  { value: 'tech',     label: 'Teknoloji', icon: Cpu,         from: '#60a5fa', to: '#2563eb' },
+  { value: 'art',      label: 'Sanat',     icon: Palette,     from: '#a78bfa', to: '#7c3aed' },
+  { value: 'business', label: 'İş',        icon: Briefcase,   from: '#fbbf24', to: '#f97316' },
+  { value: 'social',   label: 'Sosyal',    icon: PartyPopper, from: '#34d399', to: '#0d9488' },
+  { value: 'sport',    label: 'Spor',      icon: Dumbbell,    from: '#fb923c', to: '#ef4444' },
+  { value: 'game',     label: 'Oyun',      icon: Gamepad2,    from: '#818cf8', to: '#2563eb' },
 ];
 
 const TR_CITIES = [
@@ -35,57 +36,96 @@ const TR_CITIES = [
   'Iğdır','Yalova','Karabük','Kilis','Osmaniye','Düzce',
 ];
 
-function slugify(text: string): string {
-  return text.toLowerCase()
+const AVATAR_GRADIENTS = [
+  ['#60a5fa','#2563eb'],['#a78bfa','#7c3aed'],['#f472b6','#f43f5e'],
+  ['#34d399','#0d9488'],['#fbbf24','#f97316'],
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function slugify(t: string) {
+  return t.toLowerCase()
     .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
     .replace(/ı/g,'i').replace(/ö/g,'o').replace(/ç/g,'c')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
 
-function inputCls(hasError?: boolean) {
-  return `w-full bg-white border rounded-2xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
-    hasError
-      ? 'border-red-300 focus:ring-red-300/40'
-      : 'border-slate-200 focus:ring-blue-500/40 focus:border-blue-400'
+function uniqueSlug(name: string) {
+  return `${slugify(name) || 'topluluk'}-${Date.now().toString(36)}`;
+}
+
+function avatarGrad(name: string): [string, string] {
+  return AVATAR_GRADIENTS[name.charCodeAt(0) % AVATAR_GRADIENTS.length] || AVATAR_GRADIENTS[0];
+}
+
+function initials(name: string) {
+  return name.trim()
+    ? name.trim().split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
+}
+
+// ─── Küçük bileşenler ──────────────────────────────────────────────────────────
+
+function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <p className="text-xs font-bold text-slate-500 mb-2.5 uppercase tracking-wider">
+      {children}{required && <span className="text-red-400 ml-0.5">*</span>}
+    </p>
+  );
+}
+
+function Err({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return (
+    <p className="text-xs text-red-500 flex items-center gap-1 mt-1.5">
+      <AlertCircle size={11} />{msg}
+    </p>
+  );
+}
+
+function inputCls(err?: boolean) {
+  return `w-full bg-white border rounded-2xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all shadow-sm ${
+    err
+      ? 'border-red-300 focus:ring-red-300/30'
+      : 'border-slate-200 focus:ring-blue-500/30 focus:border-blue-400'
   }`;
 }
 
+// ─── Ana Bileşen ──────────────────────────────────────────────────────────────
+
 export default function CommunityCreatePage() {
   const router = useRouter();
-  const [loading, setLoading]         = useState(false);
-  const [checking, setChecking]       = useState(true);
-  const [canCreate, setCanCreate]     = useState(true);
-  const [isPro, setIsPro]             = useState(false);
 
-  const [name, setName]               = useState('');
-  const [slug, setSlug]               = useState('');
-  const [slugManual, setSlugManual]   = useState(false);
-  const [bio, setBio]                 = useState('');
-  const [category, setCategory]       = useState('');
-  const [city, setCity]               = useState('');
-  const [avatarFile, setAvatarFile]   = useState<File | null>(null);
-  const [coverFile, setCoverFile]     = useState<File | null>(null);
+  const [checking,  setChecking]  = useState(true);
+  const [canCreate, setCanCreate] = useState(false);
+  const [isPro,     setIsPro]     = useState(false);
+  const [userId,    setUserId]    = useState('');
+
+  const [name,          setName]          = useState('');
+  const [bio,           setBio]           = useState('');
+  const [category,      setCategory]      = useState('');
+  const [city,          setCity]          = useState('');
+  const [avatarFile,    setAvatarFile]    = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [coverPreview, setCoverPreview]   = useState<string | null>(null);
-  const [errors, setErrors]           = useState<Record<string, string>>({});
+  const [errors,        setErrors]        = useState<Record<string, string>>({});
+  const [submitting,    setSubmitting]    = useState(false);
 
-  // Kullanıcı kontrolü
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
+      setUserId(user.id);
 
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_pro')
-        .eq('id', user.id)
-        .single();
-
+        .from('profiles').select('is_pro').eq('id', user.id).single();
       const pro = profile?.is_pro || false;
       setIsPro(pro);
 
-      if (!pro) {
+      if (pro) {
+        setCanCreate(true);
+      } else {
         const { count } = await supabase
           .from('communities')
           .select('id', { count: 'exact', head: true })
@@ -96,276 +136,310 @@ export default function CommunityCreatePage() {
     })();
   }, []);
 
-  // Name → slug otomatik
-  useEffect(() => {
-    if (!slugManual) setSlug(slugify(name));
-  }, [name, slugManual]);
+  // ── Avatar upload ─────────────────────────────────────────────────────────
 
   const handleAvatar = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    if (f.size > 2 * 1024 * 1024) { toast.error('Avatar maks. 2MB'); return; }
+    if (f.size > 2 * 1024 * 1024) { toast.error('Avatar maks. 2MB.'); return; }
     if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     setAvatarPreview(URL.createObjectURL(f));
     setAvatarFile(f);
   };
 
-  const handleCover = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    if (f.size > 5 * 1024 * 1024) { toast.error('Kapak maks. 5MB'); return; }
-    if (coverPreview) URL.revokeObjectURL(coverPreview);
-    setCoverPreview(URL.createObjectURL(f));
-    setCoverFile(f);
-  };
+  // ── Validate ─────────────────────────────────────────────────────────────
 
   const validate = () => {
-    const errs: Record<string, string> = {};
-    if (!name.trim())     errs.name     = 'Topluluk adı zorunludur.';
-    if (name.length > 80) errs.name     = 'En fazla 80 karakter.';
-    if (!slug.trim())     errs.slug     = 'Slug zorunludur.';
-    if (!/^[a-z0-9-]+$/.test(slug)) errs.slug = 'Sadece küçük harf, rakam ve tire.';
-    if (!category)        errs.category = 'Kategori seçiniz.';
-    if (bio.length > 500) errs.bio      = 'En fazla 500 karakter.';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+    const e: Record<string, string> = {};
+    if (!name.trim())     e.name     = 'Topluluk adı zorunludur.';
+    if (name.length > 80) e.name     = 'En fazla 80 karakter.';
+    if (!category)        e.category = 'Bir kategori seçin.';
+    if (!city)            e.city     = 'Şehir seçimi zorunludur.';
+    if (bio.length > 500) e.bio      = 'En fazla 500 karakter.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const uploadFile = async (file: File, bucket: string, userId: string): Promise<string> => {
-    const ext = file.name.split('.').pop();
-    const path = `${userId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
-    if (error) throw new Error(error.message);
-    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-  };
+  // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    setLoading(true);
+    setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Giriş yapmalısınız.');
-
-      // Slug benzersizlik kontrolü
-      const { data: existing } = await supabase
-        .from('communities').select('id').eq('slug', slug).single();
-      if (existing) { setErrors(e => ({ ...e, slug: 'Bu slug zaten kullanılıyor.' })); setLoading(false); return; }
-
       let avatarUrl: string | null = null;
-      let coverUrl:  string | null = null;
-      if (avatarFile) avatarUrl = await uploadFile(avatarFile, 'community_avatars', user.id);
-      if (coverFile)  coverUrl  = await uploadFile(coverFile,  'community_covers',  user.id);
+      if (avatarFile) {
+        const ext  = avatarFile.name.split('.').pop();
+        const path = `${userId}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from('community_avatars').upload(path, avatarFile, { upsert: true });
+        if (upErr) throw upErr;
+        avatarUrl = supabase.storage.from('community_avatars').getPublicUrl(path).data.publicUrl;
+      }
 
-      const { data: community, error } = await supabase
+      const { data: comm, error } = await supabase
         .from('communities')
         .insert([{
-          founder_id:  user.id,
-          name:        name.trim(),
-          slug:        slug.trim(),
-          bio:         bio.trim() || null,
-          category,
-          city:        city || null,
-          avatar_url:  avatarUrl,
-          cover_url:   coverUrl,
+          founder_id: userId,
+          name:       name.trim(),
+          slug:       uniqueSlug(name),
+          bio:        bio.trim() || null,
+          category, city,
+          avatar_url: avatarUrl,
         }])
-        .select('id, slug')
-        .single();
+        .select('id').single();
 
       if (error) {
-        if (error.code === '23505') {
-          setErrors(e => ({ ...e, slug: 'Bu slug zaten kullanılıyor.' }));
-        } else if (error.message.includes('violates row-level')) {
+        if (error.message.includes('row-level')) {
           toast.error('Topluluk oluşturma limitine ulaştınız.');
-        } else {
-          throw error;
-        }
-        setLoading(false); return;
+        } else throw error;
+        setSubmitting(false); return;
       }
 
       toast.success('Topluluk oluşturuldu! 🎉');
-      router.push(`/community/${community.id}`);
+      router.push(`/community/${comm.id}`);
     } catch (err: any) {
       toast.error(err?.message || 'Bir hata oluştu.');
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  // ── Guards ────────────────────────────────────────────────────────────────
+
   if (checking) return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <Loader2 size={22} className="animate-spin text-slate-400" />
+      <Loader2 size={22} className="animate-spin text-slate-300" />
     </div>
   );
 
   if (!canCreate) return (
-    <div className="max-w-lg mx-auto py-20 flex flex-col items-center gap-5 text-center px-4">
-      <div className="w-16 h-16 rounded-3xl bg-amber-50 flex items-center justify-center">
-        <Lock size={26} className="text-amber-500" />
+    <motion.div
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      className="max-w-sm mx-auto py-20 flex flex-col items-center gap-5 text-center px-4"
+    >
+      <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+        <Lock size={24} className="text-amber-500" />
       </div>
       <div>
-        <h2 className="text-lg font-black text-slate-900">Limit Doldu</h2>
-        <p className="text-sm text-slate-400 mt-2 leading-relaxed">
-          Ücretsiz hesaplar yalnızca 1 topluluk kurabilir.
-          Pro'ya geçerek sınırsız topluluk oluşturabilirsiniz.
+        <p className="text-base font-black text-slate-900">Limit Doldu</p>
+        <p className="text-sm text-slate-400 mt-1.5 leading-relaxed max-w-xs">
+          Ücretsiz hesapla en fazla 1 topluluk kurabilirsin. Pro'ya geçerek sınırsız topluluk oluşturabilirsin.
         </p>
       </div>
       <button onClick={() => router.back()}
-        className="px-5 py-2.5 rounded-full text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
+        className="px-5 py-2.5 rounded-full text-sm font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm">
         Geri Dön
       </button>
-    </div>
+    </motion.div>
   );
 
-  return (
-    <div className="max-w-2xl mx-auto py-8 px-4 flex flex-col gap-6">
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-      {/* Header */}
+  const [g1, g2]     = avatarGrad(name || 'A');
+  const activeCat    = CATEGORIES.find(c => c.value === category);
+  const isComplete   = !!(name.trim() && category && city);
+  const hasErrors    = Object.keys(errors).length > 0;
+
+  return (
+    <div className="max-w-xl mx-auto py-8 px-4 flex flex-col gap-5 pb-12">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.back()}
           className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors shadow-sm shrink-0">
-          <ChevronLeft size={17} />
+          <ChevronLeft size={16} />
         </button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-black text-slate-900 tracking-tight">Topluluk Kur</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
-            {isPro ? 'Pro hesap — sınırsız topluluk.' : 'Ücretsiz hesap — 1 topluluk hakkın var.'}
+          <p className="text-xs text-slate-400 mt-0.5">
+            {isPro ? 'Pro hesap — sınırsız topluluk' : 'Ücretsiz hesap — 1 topluluk hakkın var'}
           </p>
         </div>
       </div>
 
-      {/* Kapak */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden">
-        {/* Cover görseli */}
-        <label className="block relative h-36 cursor-pointer group overflow-hidden bg-slate-50">
-          {coverPreview ? (
-            <>
-              <Image src={coverPreview} alt="Kapak" fill className="object-cover" unoptimized />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <p className="text-white text-xs font-bold">Değiştir</p>
-              </div>
-            </>
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 group-hover:bg-slate-100 transition-colors">
-              <CloudUpload size={20} className="text-slate-400" />
-              <p className="text-xs text-slate-400 font-medium">Kapak Fotoğrafı Ekle</p>
-              <p className="text-[10px] text-slate-300">16:9 · Maks 5MB</p>
-            </div>
-          )}
-          <input type="file" accept="image/*" onChange={handleCover} className="hidden" />
-        </label>
+      {/* ── Canlı önizleme ───────────────────────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.05)] p-5">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3.5">Önizleme</p>
+        <div className="flex items-center gap-4">
 
-        {/* Avatar */}
-        <div className="px-6 pb-6 pt-3 flex items-end gap-4">
-          <label className="relative cursor-pointer shrink-0 -mt-10">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 ring-4 ring-white shadow-lg overflow-hidden flex items-center justify-center">
+          {/* Avatar */}
+          <label className="relative cursor-pointer shrink-0 group">
+            <div
+              className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center shadow-lg ring-4 ring-white overflow-hidden"
+              style={{ background: `linear-gradient(135deg,${g1},${g2})` }}
+            >
               {avatarPreview
-                ? <Image src={avatarPreview} alt="Avatar" fill className="object-cover" unoptimized />
-                : <Zap size={28} className="text-white" />
+                ? <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
+                : <span className="text-white font-black text-2xl select-none">{initials(name)}</span>
               }
             </div>
-            <div className="absolute inset-0 rounded-2xl bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-              <CloudUpload size={16} className="text-white" />
+            <div className="absolute inset-0 rounded-2xl bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <CloudUpload size={15} className="text-white" />
             </div>
             <input type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
           </label>
-          <p className="text-xs text-slate-400 pb-1">Avatar ve kapak görselini değiştirmek için tıkla.</p>
+
+          <div className="flex-1 min-w-0">
+            {name.trim() ? (
+              <>
+                <p className="font-black text-slate-900 leading-tight truncate">{name}</p>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {activeCat && (
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                      style={{ background: `linear-gradient(135deg,${activeCat.from},${activeCat.to})` }}
+                    >
+                      {activeCat.label}
+                    </span>
+                  )}
+                  {city && (
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <MapPin size={9} />{city}
+                    </span>
+                  )}
+                </div>
+                {bio.trim() && (
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">{bio}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-slate-400">Ad girince önizleme burada görünür</p>
+            )}
+            <p className="text-[10px] text-slate-400 mt-2">Avatar için görsele tıkla · maks 2MB</p>
+          </div>
         </div>
       </div>
 
-      {/* Form */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-6 flex flex-col gap-5">
+      {/* ── Form alanları ────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.05)] p-6 flex flex-col gap-5">
 
         {/* Ad */}
         <div>
-          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">
-            Topluluk Adı <span className="text-red-400">*</span>
-          </label>
-          <input type="text" value={name}
-            onChange={e => setName(e.target.value)}
+          <Label required>Topluluk Adı</Label>
+          <input
+            type="text" value={name} maxLength={80}
+            onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: '' })); }}
             placeholder="Örn: Antalya Tech Meetup"
-            className={inputCls(!!errors.name)} />
-          {errors.name && <p className="text-xs text-red-500 flex items-center gap-1 mt-1.5"><AlertCircle size={11} />{errors.name}</p>}
-          <p className="text-[10px] text-slate-400 mt-1">{name.length}/80 karakter</p>
-        </div>
-
-        {/* Slug */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">
-            Topluluk URL'i <span className="text-red-400">*</span>
-          </label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-400 shrink-0">etkinrota.com/community/</span>
-            <input type="text" value={slug}
-              onChange={e => { setSlug(e.target.value); setSlugManual(true); }}
-              placeholder="antalya-tech-meetup"
-              className={`flex-1 ${inputCls(!!errors.slug)}`} />
+            className={inputCls(!!errors.name)}
+          />
+          <div className="flex justify-between mt-1.5">
+            <Err msg={errors.name} />
+            <p className={`text-[10px] ml-auto tabular-nums ${name.length > 70 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+              {name.length}/80
+            </p>
           </div>
-          {errors.slug && <p className="text-xs text-red-500 flex items-center gap-1 mt-1.5"><AlertCircle size={11} />{errors.slug}</p>}
-        </div>
-
-        {/* Biyografi */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Kısa Açıklama</label>
-          <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3}
-            placeholder="Topluluğunuz hakkında kısa bir açıklama yazın..."
-            style={{ resize: 'none' }}
-            className={inputCls(!!errors.bio)} />
-          {errors.bio && <p className="text-xs text-red-500 flex items-center gap-1 mt-1.5"><AlertCircle size={11} />{errors.bio}</p>}
-          <p className="text-[10px] text-slate-400 mt-1">{bio.length}/500 karakter</p>
         </div>
 
         {/* Kategori */}
         <div>
-          <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">
-            Kategori <span className="text-red-400">*</span>
-          </label>
+          <Label required>Kategori</Label>
           <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map(({ value, label, icon: Icon, gradient }) => {
+            {CATEGORIES.map(({ value, label, icon: Icon, from, to }) => {
               const active = category === value;
               return (
-                <button key={value} type="button" onClick={() => setCategory(value)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition-all hover:scale-[1.02] active:scale-[0.97] ${
+                <button
+                  key={value} type="button"
+                  onClick={() => { setCategory(active ? '' : value); setErrors(p => ({ ...p, category: '' })); }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
                     active
                       ? 'text-white border-transparent shadow-sm'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
-                  style={active ? { background: `linear-gradient(135deg, var(--tw-gradient-from), var(--tw-gradient-to))` } : {}}
+                  style={active ? { background: `linear-gradient(135deg,${from},${to})` } : {}}
                 >
-                  <div className={`flex items-center gap-2 ${active ? `bg-gradient-to-r ${gradient} bg-clip-text` : ''}`}>
-                    <Icon size={14} className={active ? 'text-white' : 'text-slate-400'} />
-                    {active && <Check size={12} className="text-white" strokeWidth={3} />}
-                  </div>
-                  <span className={active ? 'text-white' : ''}>{label}</span>
+                  <Icon size={12} className={active ? 'text-white' : 'text-slate-400'} />
+                  {label}
+                  {active && <Check size={10} className="text-white" strokeWidth={3} />}
                 </button>
               );
             })}
           </div>
-          {errors.category && <p className="text-xs text-red-500 flex items-center gap-1 mt-2"><AlertCircle size={11} />{errors.category}</p>}
+          <Err msg={errors.category} />
         </div>
 
         {/* Şehir */}
         <div>
-          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">
-            <span className="flex items-center gap-1.5"><MapPin size={11} /> Şehir (Opsiyonel)</span>
-          </label>
-          <select value={city} onChange={e => setCity(e.target.value)}
-            className={`${inputCls()} appearance-none`}>
-            <option value="">Şehir seçin (opsiyonel)</option>
-            {TR_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <Label required>Şehir</Label>
+          <div className="relative">
+            <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <select
+              value={city}
+              onChange={e => { setCity(e.target.value); setErrors(p => ({ ...p, city: '' })); }}
+              className={`${inputCls(!!errors.city)} pl-9 appearance-none`}
+            >
+              <option value="">Şehir seçin</option>
+              {TR_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <Err msg={errors.city} />
+        </div>
+
+        {/* Biyografi */}
+        <div>
+          <Label>Kısa Açıklama</Label>
+          <textarea
+            value={bio} maxLength={500} rows={3} style={{ resize: 'none' }}
+            onChange={e => { setBio(e.target.value); setErrors(p => ({ ...p, bio: '' })); }}
+            placeholder="Topluluk neyi hedefliyor? Kimler için kuruldu? Kısa ve net anlat..."
+            className={inputCls(!!errors.bio)}
+          />
+          <div className="flex justify-between mt-1.5">
+            <Err msg={errors.bio} />
+            <p className={`text-[10px] ml-auto tabular-nums ${bio.length > 450 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+              {bio.length}/500
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* CTA */}
+      {/* ── URL bilgi notu ───────────────────────────────────────────────── */}
+      <div className="flex items-start gap-2.5 px-4 py-3 bg-blue-50 border border-blue-100 rounded-2xl">
+        <div className="w-5 h-5 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+          <span className="text-[10px] font-black text-blue-600">i</span>
+        </div>
+        <p className="text-xs text-blue-700 leading-relaxed">
+          Topluluk URL'i sistem tarafından otomatik oluşturulur. Benzersizliği garanti altındadır, aynı URL'e sahip iki topluluk oluşturulamaz.
+        </p>
+      </div>
+
+      {/* ── CTA ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
-        <button onClick={() => router.back()}
-          className="px-5 py-3 rounded-full text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all">
+        <button
+          onClick={() => router.back()}
+          className="px-5 py-3 rounded-2xl text-sm font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 transition-all shadow-sm shrink-0"
+        >
           İptal
         </button>
-        <button onClick={handleSubmit} disabled={loading}
-          className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-full text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg hover:shadow-blue-200 active:scale-[0.98] disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
-          {loading ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />}
-          {loading ? 'Oluşturuluyor...' : 'Topluluğu Kur'}
-        </button>
+
+        <motion.button
+          onClick={handleSubmit} disabled={submitting}
+          whileTap={!submitting ? { scale: 0.97 } : {}}
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold text-white transition-all disabled:opacity-60"
+          style={{
+            background: isComplete
+              ? 'linear-gradient(135deg,#3b82f6,#2563eb)'
+              : 'linear-gradient(135deg,#94a3b8,#64748b)',
+            boxShadow: isComplete ? '0 4px 16px rgba(37,99,235,0.3)' : 'none',
+          }}
+        >
+          {submitting
+            ? <><Loader2 size={15} className="animate-spin" />Oluşturuluyor...</>
+            : <><Users size={15} />Topluluğu Kur</>
+          }
+        </motion.button>
       </div>
+
+      {/* Hata özeti */}
+      <AnimatePresence>
+        {hasErrors && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="flex items-center justify-center gap-2 -mt-2"
+          >
+            <AlertCircle size={13} className="text-red-500" />
+            <p className="text-xs text-red-500 font-semibold">Zorunlu alanları doldurun.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

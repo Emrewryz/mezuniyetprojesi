@@ -63,7 +63,7 @@ function NavContent({ onClose }: { onClose: () => void }) {
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-md shadow-blue-200 shrink-0">
           <Zap size={15} className="text-white" />
         </div>
-        <span className="text-base font-black tracking-tight text-slate-900">EtkinRota</span>
+        <span className="text-base font-black tracking-tight text-slate-900">Etkinlik Hub</span>
       </Link>
 
       {/* Nav */}
