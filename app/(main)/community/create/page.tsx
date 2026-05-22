@@ -36,7 +36,7 @@ const TR_CITIES = [
   'Iğdır','Yalova','Karabük','Kilis','Osmaniye','Düzce',
 ];
 
-const AVATAR_GRADIENTS = [
+const AVATAR_GRADIENTS: [string, string][] = [
   ['#60a5fa','#2563eb'],['#a78bfa','#7c3aed'],['#f472b6','#f43f5e'],
   ['#34d399','#0d9488'],['#fbbf24','#f97316'],
 ];
