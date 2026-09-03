@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -8,7 +8,7 @@ import { Mail, Lock, Eye, EyeOff, Loader2, Zap } from 'lucide-react';
 
 const inputCls = "w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/dashboard';
@@ -39,7 +39,7 @@ export default function LoginPage() {
             <Zap size={22} className="text-white" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">EtkinRota</h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Etkinlik Hub</h1>
             <p className="text-sm text-slate-400 mt-0.5">Hesabına giriş yap</p>
           </div>
         </div>
@@ -89,5 +89,18 @@ export default function LoginPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() Next.js 16'da Suspense sınırı içinde olmalı
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 size={22} className="animate-spin text-slate-400" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
