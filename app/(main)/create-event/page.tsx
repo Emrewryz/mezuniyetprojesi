@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
+import React, { useState, useEffect, useRef, ChangeEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
@@ -174,29 +174,9 @@ function CommunitySelector({ communities, onSelect }: {
   );
 }
 
-// ─── Option Row ───────────────────────────────────────────────────────────────
-
-function OptionRow({ icon: Icon, label, value, onClick }: {
-  icon: any; label: string; value: React.ReactNode; onClick?: () => void;
-}) {
-  return (
-    <button type="button" onClick={onClick}
-      className="w-full flex items-center gap-3 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors rounded-lg px-2 -mx-2 group text-left">
-      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-slate-200 transition-colors">
-        <Icon size={14} className="text-slate-500" />
-      </div>
-      <span className="flex-1 text-sm font-medium text-slate-700">{label}</span>
-      <span className="text-sm font-semibold text-slate-400 flex items-center gap-1.5">
-        {value}
-        <Pencil size={12} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
-      </span>
-    </button>
-  );
-}
-
-// ─── Ana Bileşen ──────────────────────────────────────────────────────────────
-
-export default function CreateEventPage() {
+// ─── Asıl İçerik Bileşeni (Suspense İçine Alınan Kısım) ─────────────────────
+// Önceden burası 'export default function CreateEventPage' idi.
+function CreateEventContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
@@ -309,6 +289,7 @@ export default function CreateEventPage() {
     setPreviewUrl(URL.createObjectURL(file));
     setCoverFile(file);
   };
+  
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   const validateDates = () => {
@@ -622,5 +603,19 @@ export default function CreateEventPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ─── Asıl Sayfa Bileşeni (Next.js'in Build Sırasında Okuyacağı Yer) ─────────
+export default function CreateEventPage() {
+  return (
+    // URL'den parametre okuyan component, Next.js kızmasın diye Suspense (Bekleme) içine alındı.
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 size={22} className="animate-spin text-slate-400" />
+      </div>
+    }>
+      <CreateEventContent />
+    </Suspense>
   );
 }

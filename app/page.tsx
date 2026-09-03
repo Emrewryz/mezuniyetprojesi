@@ -164,7 +164,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-md shadow-blue-200">
               <Zap size={14} className="text-white" />
             </div>
-            <span className="text-sm font-black tracking-tight text-slate-900">EtkinRota</span>
+            <span className="text-sm font-black tracking-tight text-slate-900">Etkinlik Hub</span>
           </motion.div>
 
           <motion.div
@@ -286,7 +286,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6 }}
             className="text-center mb-16"
           >
-            <p className="text-[11px] font-bold text-blue-500 uppercase tracking-widest mb-3">Neden EtkinRota?</p>
+            <p className="text-[11px] font-bold text-blue-500 uppercase tracking-widest mb-3">Neden Etkinlik Hub?</p>
             <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
               Etkinlik deneyimini<br />yeniden tanımlıyoruz
             </h2>
@@ -402,9 +402,9 @@ export default function LandingPage() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-sm">
               <Zap size={12} className="text-white" />
             </div>
-            <span className="text-sm font-black text-slate-700">EtkinRota</span>
+            <span className="text-sm font-black text-slate-700">Etkinlik Hub</span>
           </div>
-          <p className="text-xs text-slate-400">© 2025 EtkinRota. Tüm hakları saklıdır.</p>
+          <p className="text-xs text-slate-400">© 2025 Etkinlik Hub. Tüm hakları saklıdır.</p>
           <div className="flex items-center gap-5">
             {['Gizlilik', 'Kullanım Koşulları', 'İletişim'].map((l) => (
               <span key={l} className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer transition-colors">{l}</span>
